@@ -16,9 +16,64 @@
     *   `test/index.test.ts` → tests `src/index.ts`
     *   `test/core/transport.test.ts` → tests `src/core/transport.ts`
     *   `test/core/in-memory-event-store.test.ts` → tests `src/core/in-memory-event-store.ts`
-    *   `test/tools/hello-world.test.ts` → tests `src/tools/hello-world/index.ts`
+        *   `test/tools/hello-world.test.ts` → tests `src/tools/hello-world/index.ts`
+        *   `test/tools/add-two-numbers.test.ts` → tests `src/tools/add-two-numbers/index.ts`
+        *   `test/tools/tokenize-prompt.test.ts` → tests `src/tools/tokenize-prompt/index.ts`
     *   `test/integration/` → integration/E2E tests and shared test utilities (`test-utils.ts`)
+        *   `test/integration/tools/hello-world.test.ts` → integration for `hello-world`
+        *   `test/integration/tools/add-two-numbers.test.ts` → integration for `add_two_numbers`
+        *   `test/integration/tools/tokenize-prompt.test.ts` → integration for `tokenize-prompt`
     *   Do **NOT** place tests inside `src/` (e.g. no `src/__tests__/`).
+
+### 1.1 Full Project Parity Target (for `/mcp-create`)
+When scaffolding from empty source files, generate this full shape:
+
+```text
+.github/
+    copilot-instructions.md
+    mcp-create.prompt.md
+    mcp-migrate.prompt.md
+resources/
+    hello-world/
+        welcome.md
+src/
+    index.ts
+    meta.ts
+    core/
+        in-memory-event-store.ts
+        mcp-server.ts
+        session.ts
+        transport.ts
+    tools/
+        index.ts
+        hello-world/
+            index.ts
+        add-two-numbers/
+            index.ts
+        tokenize-prompt/
+            index.ts
+test/
+    index.test.ts
+    core/
+        in-memory-event-store.test.ts
+        transport.test.ts
+    tools/
+        hello-world.test.ts
+        add-two-numbers.test.ts
+        tokenize-prompt.test.ts
+    integration/
+        test-utils.ts
+        tools/
+            hello-world.test.ts
+            add-two-numbers.test.ts
+            tokenize-prompt.test.ts
+```
+
+### 1.2 Tool Naming Contract
+Keep tool names exactly:
+- `hello-world`
+- `add_two_numbers`
+- `tokenize-prompt`
 
 ## 2. Reference Configuration
 **`package.json`** (Base - MUST Audit Versions):
@@ -174,7 +229,13 @@ export function createHttpServer(serverFactory: McpServerFactory) {
 ```typescript
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerHelloWorld } from './hello-world/index.js';
-export function registerTools(server: McpServer) { registerHelloWorld(server); /* Add others */ }
+import { registerAddTwoNumbers } from './add-two-numbers/index.js';
+import { registerTokenizePrompt } from './tokenize-prompt/index.js';
+export function registerTools(server: McpServer) {
+    registerHelloWorld(server);
+    registerAddTwoNumbers(server);
+    registerTokenizePrompt(server);
+}
 ```
 
 **`src/index.ts`**:
@@ -193,6 +254,11 @@ main().catch(console.error);
 
 ## 4. Verification Check
 ```bash
+# Build/lint/tests must pass first
+npm run build
+npm run lint
+npm test
+
 # Init
 curl -i -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "MCP-Protocol-Version: 2025-11-25" -d '{ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "curl", "version": "1.0"} } }'
 # SSE

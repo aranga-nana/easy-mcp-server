@@ -54,12 +54,15 @@ For this tool, we recommend using the GitHub signed-in user method (default) or 
 
 ## 3. Detailed Data Flow
 
-1.  **Invocation**: User invokes `code_review` (manually or via chat).
-2.  **Discovery (Server-Side)**:
-    *   The Server runs `git diff --name-only` to strictly identify modified files.
+1.  **Invocation**: User invokes `code_review` from IDE (manually or via chat).
+2.  **Client-Side Preparation (Copilot IDE Plugin)**:
+    *   The IDE plugin identifies modified/open files that need review.
+    *   The IDE plugin reads the file content from the editor buffers.
+    *   The IDE plugin sends file names + content to the MCP server via tool call.
 3.  **Context Gathering (Server-Side)**:
+    *   The Server receives file names and content from the client.
     *   The Server reads `resources/code-review/standards.md` (Validation Standards).
-    *   The Server reads the exact file content from disk.
+    *   The Server validates file count and size limits.
 4.  **Agent Session Bootstrap (Copilot SDK)**:
     *   The Server initializes a Copilot SDK client/session (Node.js package: `@github/copilot-sdk`).
     *   The Server selects a **Claude** model for review generation (configurable default).
@@ -69,44 +72,36 @@ For this tool, we recommend using the GitHub signed-in user method (default) or 
     *   The server enforces output expectations (Markdown/text contract, size limits, deterministic fallback).
 6.  **Result Delivery**:
     *   The Copilot SDK returns the generated markdown review.
-    *   The Server sends this back as the tool result.
+    *   The Server sends this back as the tool result to the IDE.
 
 ## 4. Sequence Diagram
 
 ```mermaid
 sequenceDiagram
-    participant Client as Copilot (Client)
+    participant IDE as Copilot IDE Plugin
     participant Server as MCP Server
     participant FS as FileSystem
-    participant Git as Git Process
     participant SDK as Copilot SDK Runtime
     participant Model as Copilot Model
 
-    Note over Client: User asks for review
-    Client->>Server: call_tool("code_review", {})
+    Note over IDE: User asks for review
+    Note over IDE: IDE detects modified files
+    IDE->>IDE: Read file content from editor buffers
+    IDE->>Server: call_tool("code_review", {files: [{name, content}]})
     activate Server
     
-    rect rgb(240, 248, 255)
-        Note right of Server: Step 1: Discovery
-        Server->>Git: git diff --name-only HEAD
-        Git-->>Server: [src/main.ts, src/utils.ts]
-    end
-    
     rect rgb(240, 255, 240)
-        Note right of Server: Step 2: Context Gathering
-        loop For each file
-            Server->>FS: readFile("src/main.ts")
-            FS-->>Server: const x = ...
-        end
+        Note right of Server: Step 1: Validation & Context Gathering
+        Server->>Server: Validate file count & sizes
         Server->>FS: readFile("resources/code-review/standards.md")
         FS-->>Server: "Review Standards Content..."
     end
     
     rect rgb(255, 248, 240)
-        Note right of Server: Step 3: Agent Review via Copilot SDK
+        Note right of Server: Step 2: Agent Review via Copilot SDK
         Server->>SDK: create client/session + send review task
         activate SDK
-        SDK->>Model: run agent review with context + standards
+        SDK->>Model: run agent review with files + standards
         activate Model
         Model-->>SDK: review result (Markdown)
         deactivate Model
@@ -114,8 +109,9 @@ sequenceDiagram
         deactivate SDK
     end
     
-    Server-->>Client: Tool Result (Review Markdown)
+    Server-->>IDE: Tool Result (Review Markdown)
     deactivate Server
+    Note over IDE: Display review in IDE
 ```
 
 ## 5. File Structure (Implemented)
@@ -175,9 +171,13 @@ For code review, we default to `claude-sonnet-4.5` for its optimal balance of sp
 **Schema:**
 ```typescript
 const inputSchema = z.object({
-  files: z.array(z.string())
-    .optional()
-    .describe('List of file paths (relative to workspace root) to review. If omitted, auto-discovers modified files using git.')
+  files: z.array(z.object({
+    name: z.string().describe('File path (relative to workspace root)'),
+    content: z.string().describe('Full file content to review')
+  }))
+  .min(1)
+  .max(5)
+  .describe('Array of files to review. Client must provide file names and content. Maximum 5 files per review.')
 });
 ```
 
@@ -186,6 +186,39 @@ const inputSchema = z.object({
 // Based on @github/copilot-sdk v0.1.23 API
 // Reference: https://www.npmjs.com/package/@github/copilot-sdk
 import { CopilotClient } from '@github/copilot-sdk';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+// Validate input
+if (!files || files.length === 0) {
+    return {
+        isError: true,
+        content: [{ type: 'text', text: 'No files provided. Client must send file names and content.' }]
+    };
+}
+
+const MAX_FILES = parseInt(process.env.CODE_REVIEW_MAX_FILES ?? '5', 10);
+const MAX_FILE_SIZE = parseInt(process.env.CODE_REVIEW_MAX_FILE_SIZE ?? '50000', 10);
+
+if (files.length > MAX_FILES) {
+    return {
+        isError: true,
+        content: [{ type: 'text', text: `Too many files (${files.length}). Maximum: ${MAX_FILES}` }]
+    };
+}
+
+// Validate file sizes
+for (const file of files) {
+    if (file.content.length > MAX_FILE_SIZE) {
+        return {
+            isError: true,
+            content: [{ type: 'text', text: `File too large: ${file.name} (${file.content.length} bytes, max: ${MAX_FILE_SIZE})` }]
+        };
+    }
+}
+
+// Load standards
+const standardsContent = await getReviewStandards();
 
 const taskInstructions = `
 You are a senior code reviewer.
@@ -281,86 +314,136 @@ if (stats.size > MAX_FILE_SIZE) {
 **Issue**: Tool reads local files.  
 **Mitigation**: Context gathering happens entirely locally. Only selected content is sent via authenticated Copilot SDK channel. Files are read using workspace-relative paths to prevent directory traversal.
 
-### 8.3 Command Injection Prevention
-**Issue**: Current implementation uses `exec('git diff')` which spawns a shell.  
-**Reference**: [Node.js child_process.execFile()](https://nodejs.org/api/child_process.html#child_processexecfilefile-args-options-callback)
+### 8.3 Input Validation
+**Issue**: Client-provided file names and content need validation.  
+**Mitigation**:
 
-**FIXED Implementation**:
 ```typescript
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { z } from 'zod';
 
-const execFileAsync = promisify(execFile);
+// Schema validates structure
+const fileSchema = z.object({
+    name: z.string().min(1).max(500), // Reasonable path length
+    content: z.string().max(MAX_FILE_SIZE)
+});
 
-async function getGitModifiedFiles(): Promise<string[]> {
-    try {
-        // Use execFile instead of exec - does not spawn shell
-        // Reference: https://nodejs.org/api/child_process.html#child_processexecfilefile-args-options-callback
-        const { stdout } = await execFileAsync('git', ['diff', '--name-only', 'HEAD'], {
-            cwd: PROJECT_ROOT,
-            maxBuffer: 1024 * 1024 // 1 MB
-        });
-        return stdout.split('\n').map(f => f.trim()).filter(f => f.length > 0);
-    } catch (error) {
-        return [];
+const inputSchema = z.object({
+    files: z.array(fileSchema).min(1).max(MAX_FILES)
+});
+
+// Additional runtime validation
+for (const file of files) {
+    // Validate file name doesn't contain suspicious patterns
+    if (file.name.includes('..') || file.name.startsWith('/')) {
+        return {
+            isError: true,
+            content: [{ type: 'text', text: `Invalid file path: ${file.name}` }]
+        };
     }
 }
 ```
 
-**Why execFile?** (per [Node.js docs](https://nodejs.org/api/child_process.html)):
-- Does **not** spawn a shell by default
-- Arguments are passed as array, preventing injection
-- More efficient than `exec` on Unix systems
-- Shell metacharacters cannot trigger arbitrary command execution
+**Why this approach?**:
+- Client sends content directly (no file system access needed)
+- No command execution required (git operations removed)
+- Validates against directory traversal patterns
+- Enforces size limits before processing
 
-### 8.4 Path Validation
-**Issue**: User-provided file paths could escape workspace.  
+### 8.4 Content Size Validation
+**Issue**: Large file content could exhaust memory or exceed context windows.  
 **Mitigation**:
 ```typescript
-import { normalize, isAbsolute, relative } from 'node:path';
+const MAX_FILE_SIZE = parseInt(process.env.CODE_REVIEW_MAX_FILE_SIZE ?? '50000', 10);
+const MAX_TOTAL_SIZE = MAX_FILES * MAX_FILE_SIZE; // 250 KB default
 
-function validateFilePath(inputPath: string, workspaceRoot: string): string | null {
-    // Reject absolute paths
-    if (isAbsolute(inputPath)) return null;
+let totalSize = 0;
+for (const file of files) {
+    const fileSize = Buffer.byteLength(file.content, 'utf8');
+    totalSize += fileSize;
     
-    // Normalize to prevent "../" escapes
-    const normalized = normalize(inputPath);
-    const fullPath = join(workspaceRoot, normalized);
-    const relativePath = relative(workspaceRoot, fullPath);
-    
-    // Ensure result is still within workspace
-    if (relativePath.startsWith('..')) return null;
-    
-    return fullPath;
+    if (fileSize > MAX_FILE_SIZE) {
+        return {
+            isError: true,
+            content: [{ 
+                type: 'text', 
+                text: `File too large: ${file.name} (${fileSize} bytes, max: ${MAX_FILE_SIZE})` 
+            }]
+        };
+    }
+}
+
+if (totalSize > MAX_TOTAL_SIZE) {
+    return {
+        isError: true,
+        content: [{ 
+            type: 'text', 
+            text: `Total content too large: ${totalSize} bytes (max: ${MAX_TOTAL_SIZE}). Review fewer files.` 
+        }]
+    };
 }
 ```
 
 ### 8.5 Timeout Handling
 **Issue**: Review operations could hang indefinitely.  
 **Mitigation**: All operations have timeouts:
-- Git operations: 10s
-- File reads: 5s each
+- Standards file read: 5s
 - SDK session: Configurable via `CODE_REVIEW_TIMEOUT` (default: 60s)
+- Total operation timeout: 90s (enforced by MCP server)
 
 ## 9. Tool API Contract
 
 ### 9.1 Input
-- `files?: string[]`
-  - If provided and non-empty: review those files.
-  - If omitted or empty: auto-discover with `git diff --name-only HEAD`.
+```typescript
+interface CodeReviewInput {
+  files: Array<{
+    name: string;      // File path relative to workspace root (e.g., "src/index.ts")
+    content: string;   // Full file content as string
+  }>;
+}
+```
+
+**Requirements**:
+- `files` array is **required** and must contain 1-5 files
+- `name` must be a relative path (no absolute paths, no ".." traversal)
+- `content` must not exceed `CODE_REVIEW_MAX_FILE_SIZE` (default: 50 KB)
+- Total content across all files must not exceed 250 KB
+
+**Client Responsibilities**:
+- IDE plugin must detect modified/relevant files
+- IDE plugin must read file content from editor buffers or workspace
+- IDE plugin must send file names and content to the server
 
 ### 9.2 Output
-- Success: `CallToolResult` with `content` containing a single text entry (Markdown review body).
-- No targets found: `CallToolResult` with non-error text message (`No modified files found to review.`).
-- Read/Copilot-SDK failures: `CallToolResult` with `isError: true` and a text error message.
+- **Success**: `CallToolResult` with `content` containing a single text entry (Markdown review body).
+  ```json
+  {
+    "content": [
+      {
+        "type": "text",
+        "text": "# Code Review Summary\n## Overall Assessment\n..."
+      }
+    ]
+  }
+  ```
+- **Validation Error**: `CallToolResult` with `isError: true`
+  - Invalid file paths
+  - Too many files
+  - File too large
+  - Invalid input schema
+- **SDK/Runtime Error**: `CallToolResult` with `isError: true`
+  - Authentication failure
+  - Network errors
+  - Timeout
+  - Model invocation failure
 
 ### 9.3 Failure Modes
-- **Git unavailable / not a git repo**: auto-discovery returns no files; tool returns no-target message unless explicit files were provided.
-- **File unreadable**: skipped and accumulated as an error detail; if all fail, return `isError: true`.
-- **File too large**: skipped with error message (exceeds `CODE_REVIEW_MAX_FILE_SIZE`).
-- **Too many files**: return `isError: true` before reading any files.
-- **Standards file missing**: fallback standards text is used (see below).
-- **Copilot SDK invocation failure**: return `isError: true` with invocation error details.
+- **No files provided**: `isError: true` - "No files provided. Client must send file names and content."
+- **Invalid file path**: `isError: true` - File path contains ".." or is absolute.
+- **File too large**: `isError: true` - Single file exceeds `CODE_REVIEW_MAX_FILE_SIZE`.
+- **Too many files**: `isError: true` - More than `CODE_REVIEW_MAX_FILES` provided.
+- **Total size exceeded**: `isError: true` - Combined file content exceeds limit.
+- **Standards file missing**: Fallback standards text is used (see below).
+- **Copilot SDK invocation failure**: `isError: true` with invocation error details.
 - **Network/API failures**: Captured and returned as `isError: true`.
 - **Timeout exceeded**: Session terminated, partial results returned if available.
 - **Authentication failure**: Clear error message directing user to run `copilot auth login`.
@@ -384,9 +467,10 @@ function validateFilePath(inputPath: string, workspaceRoot: string): string | nu
 ```
 
 ### 9.4 Determinism Rules
-- **File ordering**: Alphabetical sort applied to both git-discovered and user-provided files for consistent results.
+- **File ordering**: Process files in the order provided by client (IDE maintains order).
 - **Error messages**: Use stable templates for non-success outcomes (tests can assert exact behavior).
 - **Model determinism**: Note that LLM outputs are non-deterministic by nature; same input may yield different review content.
+- **Client responsibility**: Client determines which files to review and in what order.
 
 ## 10. Testing Strategy
 
@@ -397,26 +481,44 @@ function validateFilePath(inputPath: string, workspaceRoot: string): string | nu
 jest.mock('@github/copilot-sdk');
 
 describe('code-review tool', () => {
+    test('rejects empty files array', () => { /* ... */ });
     test('validates file paths reject absolute paths', () => { /* ... */ });
+    test('validates file paths reject directory traversal', () => { /* ... */ });
     test('enforces max file limit', () => { /* ... */ });
-    test('enforces max file size', () => { /* ... */ });
+    test('enforces max file size per file', () => { /* ... */ });
+    test('enforces total content size limit', () => { /* ... */ });
     test('falls back to default standards when file missing', () => { /* ... */ });
-    test('uses execFile for git operations', () => { /* ... */ });
+    test('processes files in client-provided order', () => { /* ... */ });
 });
 ```
 
 ### 10.2 Integration Tests (`test/integration/tools/code-review.test.ts`)
 **Focus**: End-to-end with real SDK/CLI (requires Copilot subscription)
 ```typescript
+import { readFile } from 'node:fs/promises';
+
 // Requires COPILOT_GITHUB_TOKEN or logged-in CLI
 describe('code-review integration', () => {
     test('reviews actual code files', async () => {
-        // Uses real Copilot SDK
-        const result = await callCodeReviewTool({ files: ['src/index.ts'] });
+        const content = await readFile('src/index.ts', 'utf-8');
+        const result = await callCodeReviewTool({ 
+            files: [{ name: 'src/index.ts', content }] 
+        });
         expect(result.content[0].text).toContain('review');
     }, 120000); // 2min timeout
     
-    test('handles git repository detection', async () => { /* ... */ });
+    test('reviews multiple files', async () => {
+        const file1 = await readFile('src/index.ts', 'utf-8');
+        const file2 = await readFile('src/meta.ts', 'utf-8');
+        const result = await callCodeReviewTool({
+            files: [
+                { name: 'src/index.ts', content: file1 },
+                { name: 'src/meta.ts', content: file2 }
+            ]
+        });
+        expect(result.content[0].text).toContain('index.ts');
+        expect(result.content[0].text).toContain('meta.ts');
+    }, 120000);
 });
 ```
 
@@ -620,10 +722,12 @@ Be concise but actionable. Prioritize security and correctness over style.`;
 
 ### Phase 2: Implementation
 - [ ] Update `src/tools/code-review/index.ts`:
-  - [ ] Replace `exec` with `execFile` for git operations
+  - [ ] Remove all git operations (client sends file content)
+  - [ ] Update input schema to accept `{name, content}[]`
   - [ ] Replace `server.createMessage` with Copilot SDK
-  - [ ] Add resource limits (max files, file size)
-  - [ ] Add path validation
+  - [ ] Add resource limits (max files, file size, total size)
+  - [ ] Add path validation (reject absolute paths, ".." traversal)
+  - [ ] Add content size validation
   - [ ] Add timeout handling
   - [ ] Implement fallback standards
   - [ ] Add `code-review` alias registration
@@ -638,10 +742,12 @@ Be concise but actionable. Prioritize security and correctness over style.`;
 - [ ] Write unit tests (with SDK mocking)
 - [ ] Write integration tests
 - [ ] Test error scenarios:
-  - [ ] No git repository
-  - [ ] Files too large
+  - [ ] Empty files array
+  - [ ] Single file too large
+  - [ ] Total content too large
   - [ ] Too many files
-  - [ ] Invalid file paths
+  - [ ] Invalid file paths (absolute, ".." traversal)
+  - [ ] Invalid input schema
   - [ ] SDK timeout
   - [ ] Authentication failure
 - [ ] Verify cleanup on errors (session.destroy, client.stop)
@@ -664,9 +770,20 @@ Be concise but actionable. Prioritize security and correctness over style.`;
 
 ## 16. Approach Change Summary (Sampling → Copilot SDK Agent)
 
-- **Removed approach**: MCP Sampling via `server.createMessage`.
-- **New approach**: MCP tool handler invokes Copilot SDK agent runtime directly.
-- **Why**: Better lifecycle control, clearer session handling, and alignment with Copilot SDK technical preview capabilities (multi-turn + tool execution + programmatic lifecycle).
-- **Migration note**: Keep MCP tool contract unchanged (`code_review` input/output) while replacing only the internal model invocation layer.
+- **Removed approach**: MCP Sampling via `server.createMessage` + server-side git discovery.
+- **New approach**: 
+  - MCP tool handler invokes Copilot SDK agent runtime directly
+  - Client (IDE plugin) sends file names and content to server
+  - No server-side file system access or git operations required
+- **Why**: 
+  - Better lifecycle control and clearer session handling
+  - Alignment with Copilot SDK technical preview capabilities
+  - Client knows exactly which files need review (already open/edited)
+  - Simpler security model (no command execution, no file system access)
+  - Works even for unsaved files in editor buffers
+- **Migration note**: 
+  - **Breaking change**: Input schema changed from `files?: string[]` to `files: {name, content}[]`
+  - Client must be updated to send file content
+  - Server behavior is simpler and more secure
 - **Package**: `@github/copilot-sdk` v0.1.23 (latest as of February 2026)
 - **Status**: Technical Preview - suitable for development and testing, production use pending GA release.

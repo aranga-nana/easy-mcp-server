@@ -6,6 +6,8 @@
 3.  **Core Requirement**: Use `@modelcontextprotocol/sdk` v1.26.0+. Use **Factory Pattern** for `McpServer` per session.
 4.  **Strictness**: Strict TS, 100% test coverage, `kebab-case` files.
 5.  **Dep Audit**: MUST query `npm view <pkg> version` for latest stable versions before `npm install`.
+6.  **No Confirmation Mode**: Never ask for confirmation, approval, or interactive choices. Proceed automatically through implementation, verification, and fixes.
+7.  **Defaulting Rule**: If requirements are ambiguous, choose the simplest spec-compliant option and continue.
 
 ## 1. Architecture & Structure
 *   **Core (`src/core/`)**: `mcp-server.ts` (Factory), `transport.ts` (Express/SSE), `session.ts` (State), `in-memory-event-store.ts`.

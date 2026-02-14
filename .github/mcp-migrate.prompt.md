@@ -7,6 +7,14 @@ description: Migrate to MCP (Proto 2025-11-25)
 ## Goal
 Migrate any workspace to MCP Protocol `2025-11-25` and make it match the full target architecture in `.github/copilot-instructions.md`.
 
+## Autonomous Execution Mode (No User Interaction)
+1. Run fully autonomously from start to finish.
+2. Do not ask for confirmation, permission, or interactive choices.
+3. Do not pause for approval before refactors, dependency changes, file moves, testing, or fixes.
+4. If ambiguity exists, choose the simplest option that preserves protocol compliance and parity target.
+5. Self-correct on errors and continue until verification passes.
+6. Only stop early if blocked by hard environment limits (missing credentials, network restrictions, or unavailable tooling), then report exact blocker and best-effort status.
+
 ## Rules
 1. Read `.github/copilot-instructions.md` fully and treat it as source of truth.
 2. Audit dependencies using `npm view <pkg> version` before `npm install`.

@@ -7,6 +7,14 @@ description: Create MCP server (Proto 2025-11-25)
 ## Goal
 Create the complete project from an empty workspace (no `src/`, `test/`, or `resources/` code present) using `.github/copilot-instructions.md` as source of truth.
 
+## Autonomous Execution Mode (No User Interaction)
+1. Run fully autonomously from start to finish.
+2. Do not ask for confirmation, permission, or interactive choices.
+3. Do not pause for approval before creating, editing, installing, testing, or fixing.
+4. If ambiguity exists, choose the simplest option that preserves spec compliance and parity target.
+5. Self-correct on errors and continue until all required verification steps pass.
+6. Only stop early if blocked by hard environment limits (missing credentials, network restrictions, or unavailable tooling), then report exact blocker and best-effort status.
+
 ## Hard Requirements
 1. Read `.github/copilot-instructions.md` fully before writing files.
 2. Build the exact project structure and behavior expected by current repository parity:

@@ -8,8 +8,8 @@ I need you to bootstrap a new Model Context Protocol (MCP) server from scratch u
 
 **Execution Rules:**
 1. **Source of Truth**: Read `.github/copilot-instructions.md` for the required project structure and SDK versions.
-2. **Autonomous Scaffolding**: Create the root directory, initialize the package manager, and install dependencies listed in Section 0.5.
-3. **Reference Implementation**: Implement the boilerplate code as defined in the "Project Structure" section of the instructions.
+2. **Autonomous Scaffolding**: Create the root directory, and initialize the project using the **Reference Package Configuration** in "Section 3.1" (copy the `package.json` exactly).
+3. **Reference Implementation**: Implement the boilerplate code exactly as defined in the **Reference Implementation** ("Section 4") of the instructions.
 4. **Quality & Tests**: Enforce strict types (no `any`), use `kebab-case` for all filenames. Implement unit and integration tests using **Jest** with 100% coverage. Use **ESLint** for linting.
 5. **Verification**: Run `npm run lint` and `npm test` to ensure the environment is clean, tests pass, and coverage requirements are met. Correct any failures autonomously.
 

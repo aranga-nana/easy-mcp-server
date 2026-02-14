@@ -21,7 +21,7 @@ If you are working with an **existing MCP project**:
 3.  **Upgrade Protocol**: Update the transport layer to support **Streamable HTTP (2025-11-25)** using the Reference Implementation in Section 4.
     *   Replace legacy HTTP+SSE or stdio transports with the `StreamableHTTPServerTransport` pattern.
     *   Ensure `src/meta.ts` reflects the new protocol version.
-4.  **Preserve Tools**: Tools are domain-specific. **DO NOT** delete them. Migrate them to the new `src/tools/` structure and register them in the new `src/index.ts`.
+4.  **Preserve Tools**: Tools are domain-specific. **DO NOT** delete them. Migrate them to the new `src/tools/` structure and register them using `server.registerTool`.
 
 ## 0.6. Agent Autonomy & Behavior
 
@@ -51,7 +51,7 @@ To ensure maintainability and modularity, follow this directory structure:
     *   `in-memory-event-store.ts`: Event storage for streamable transport.
 2.  **Tools (`src/tools/`)**:
     *   `src/tools/index.ts`: Central registration for all tools.
-    *   `src/tools/<tool-name>/`: Dedicated directory for each tool.
+    *   `src/tools/<tool-name>/`: Dedicated directory for each tool using `registerTool` pattern.
 3.  **Resources (`resources/`)**:
     *   `resources/<tool-name>/`: Static files or resources required by tools.
 4.  **Constants (`src/meta.ts`)**:
@@ -59,11 +59,12 @@ To ensure maintainability and modularity, follow this directory structure:
 5.  **Tests**:
     *   Mirror source structure (e.g., `src/core/transport.ts` -> `test/core/transport.test.ts`).
     *   **Strict Coverage**: Maintain 100% code coverage.
-    *   **Integration Tests**: Every tool MUST have a corresponding integration test.
+    *   **Integration Tests**: Every tool MUST have a corresponding integration test in `test/integration/tools/`.
+    *   **Test Utilities**: Use `test/integration/test-utils.ts` (if applicable) or standard `http.request` for testing Streamable HTTP to handle SSE correctly.
 
 ## 2.1 Code Quality Assurance
 
-*   **Strict Typing**: The project MUST use strict TypeScript configuration. Usage of `any` is strictly prohibited.
+*   **Strict Typing**: The project MUST use strict TypeScript configuration (`isolatedModules: true`). Usage of `any` is strictly prohibited.
 *   **Test Coverage**: The build pipeline MUST fail if test coverage drops below 100%.
 *   **Tool Verification**: Whenever a new tool is added, you MUST add a corresponding integration test case.
 *   **Naming Convention**: All file names MUST use `kebab-case`.
@@ -72,7 +73,7 @@ To ensure maintainability and modularity, follow this directory structure:
 
 Follow these steps to implement the server:
 
-1.  **Project Setup**: Initialize the project using the Reference `package.json`.
+1.  **Project Setup**: Initialize the project using the Reference `package.json` in Section 3.1.
 2.  **Core Implementation**:
     *   Implement `src/meta.ts` and `src/core/in-memory-event-store.ts`.
     *   Implement modular core: `src/core/mcp-server.ts`, `src/core/session.ts`, `src/core/transport.ts`.
@@ -85,6 +86,45 @@ Follow these steps to implement the server:
     *   Register all tools in `src/index.ts` seamlessly.
 5.  **Entry Point**: Create `src/index.ts` using the modular components.
 6.  **Verification**: Start the server and use the Example cURL Commands to verify connectivity.
+7.  **Integration Testing**: Implement robust integration tests for each tool that verify the full Streamable HTTP lifecycle (POST -> SSE).
+
+## 3.1 Reference Package Configuration
+
+Use this configuration to ensure reproducible builds.
+
+**`package.json`**:
+```json
+{
+  "name": "easy-mcp-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "lint": "eslint src/ --fix"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "chalk": "^5.3.0",
+    "express": "^4.21.1",
+    "figlet": "^1.8.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/figlet": "^1.5.8",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.9.0",
+    "eslint": "^9.15.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
+```
 
 ## 4. Reference Implementation
 
@@ -150,6 +190,9 @@ export function createHttpServer(mcpServer: McpServer) {
     const sessionManager = new SessionManager();
     // ... middleware, health checks ...
 
+    // Important: Use explicit JSON middleware or handle it in transport if needed
+    app.use(express.json());
+
     const handleMcpRequest = async (req: Request, res: Response) => {
         // ... Session handling ID logic ...
         // ... Transport creation using StreamableHTTPServerTransport ...
@@ -160,7 +203,11 @@ export function createHttpServer(mcpServer: McpServer) {
     app.get('/mcp', /* SSE logic using session.transport.handleRequest */);
     app.delete('/mcp', /* cleanup logic */);
 
-    return { app, shutdown: () => sessionManager.destroy() };
+    return { 
+        app, 
+        shutdown: () => sessionManager.destroy(),
+        sessionManager // Expose for testing
+    };
 }
 ```
 
@@ -175,12 +222,10 @@ export function registerHelloWorld(server: McpServer) {
     server.registerTool(
         "hello-world",
         {
-            description: "Get a welcome message",
-            inputSchema: z.object({
-                prompt: z.string().describe("The prompt from the user")
-            })
+            prompt: z.string().describe("The prompt from the user")
         },
-        async () => {
+        async ({ prompt }) => {
+             // Implementation
              try {
                 const filePath = join(process.cwd(), 'resources', 'hello-world', 'welcome.md');
                 const content = await readFile(filePath, 'utf-8');
@@ -243,7 +288,7 @@ sequenceDiagram
 
     Note over Client, Server: Tool Execution
     Client->>Server: POST /mcp (method: tools/call)
-    Server-->>Client: 202 Accepted
+    Server-->>Client: 200 OK
     Server->>Client: SSE Event (jsonrpc response)
 
     Note over Client, Server: Termination

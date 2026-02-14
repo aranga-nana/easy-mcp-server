@@ -14,6 +14,7 @@ export function registerHelloWorld(server: McpServer) {
         },
         async () => {
              try {
+                console.log('HELLO WORLD TOOL EXECUTED');
                 const filePath = join(process.cwd(), 'resources', 'hello-world', 'welcome.md');
                 const content = await readFile(filePath, 'utf-8');
                 return {

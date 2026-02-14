@@ -48,6 +48,7 @@ export function createHttpServer(mcpServer: McpServer) {
     });
 
     const handleMcpRequest = async (req: Request, res: Response) => {
+        // console.log(`[Transport] Handle ${req.method} ${req.path}`);
         const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
         const protocolVersion = req.headers['mcp-protocol-version'] as string | undefined;
@@ -142,6 +143,7 @@ export function createHttpServer(mcpServer: McpServer) {
 
     return {
         app,
-        shutdown: () => sessionManager.destroy()
+        shutdown: () => sessionManager.destroy(),
+        sessionManager // Expose for testing
     };
 }

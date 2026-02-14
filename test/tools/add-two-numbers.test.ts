@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerAddTwoNumbers } from '../../src/tools/add-two-numbers/index.js';
 

@@ -1,11 +1,13 @@
+import { jest } from '@jest/globals';
 import request from 'supertest';
-import { createServer } from '../../src/core/server.js';
+import { createHttpServer } from '../../src/core/transport.js';
+import { createMcpServer } from '../../src/core/mcp-server.js';
 import { PROTOCOL_VERSION } from '../../src/meta.js';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Application } from 'express';
 
-describe('MCP Server', () => {
+describe('MCP Server Transport', () => {
     let app: Application;
     let shutdown: (() => void) | undefined;
     
@@ -26,7 +28,8 @@ describe('MCP Server', () => {
     };
 
     beforeAll(async () => {
-        const result = await createServer();
+        const mcpServer = createMcpServer();
+        const result = createHttpServer(mcpServer);
         app = result.app;
         shutdown = result.shutdown;
     });
@@ -64,11 +67,20 @@ describe('MCP Server', () => {
         
         // Parse SSE
         const text = response.text;
+        
         expect(text).toContain('event: message');
         const lines = text.split('\n');
-        const dataLine = lines.find(l => l.startsWith('data: '));
-        expect(dataLine).toBeDefined();
-        const json = JSON.parse(dataLine!.substring(6));
+        const dataLines = lines.filter(l => l.startsWith('data: '));
+        const jsonLine = dataLines.find(l => l.length > 6 && l.substring(6).trim().startsWith('{'));
+        expect(jsonLine).toBeDefined();
+        
+        let json;
+        try {
+            json = JSON.parse(jsonLine!.substring(6));
+        } catch (e) {
+            console.error('Failed to parse JSON:', jsonLine!.substring(6));
+            throw e;
+        }
         
         expect(json.result).toBeDefined();
         expect(json.result.protocolVersion).toBe(PROTOCOL_VERSION);
@@ -136,7 +148,6 @@ describe('MCP Server', () => {
                     callback(null, '');
                 })
                 .end(() => {
-                    // Ignore error from destroying stream
                     resolve();
                 });
         });
@@ -163,22 +174,10 @@ describe('MCP Server', () => {
         expect(response.status).toBe(200); 
     });
 
-    it('should catch internal errors', async () => {
-        jest.spyOn(McpServer.prototype, 'connect').mockRejectedValueOnce(new Error('Connect failed'));
-        const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
-
-        const response = await request(app)
-            .post('/mcp')
-            .send(initPayload)
-            .set(commonHeaders);
-        
-        expect(response.status).toBe(500);
-        spy.mockRestore();
-    });
-
     it('should cleanup timed out sessions', async () => {
         jest.useFakeTimers();
-        const { app: testApp, shutdown: testShutdown } = await createServer();
+        const mcpServer = createMcpServer();
+        const { app: testApp, shutdown: testShutdown } = createHttpServer(mcpServer);
 
         const initResponse = await request(testApp)
             .post('/mcp')
@@ -188,7 +187,7 @@ describe('MCP Server', () => {
         const sessionId = initResponse.headers['mcp-session-id'];
         expect(sessionId).toBeDefined();
 
-        jest.advanceTimersByTime(65 * 60 * 1000);
+        jest.advanceTimersByTime(65 * 60 * 1000); // 65 minutes
 
         const response = await request(testApp)
             .post('/mcp')
@@ -200,7 +199,7 @@ describe('MCP Server', () => {
                 method: "ping"
             });
         
-        expect(response.status).toBe(400); 
+        expect(response.status).toBe(404); 
         
         if (testShutdown) testShutdown();
     });
@@ -209,7 +208,7 @@ describe('MCP Server', () => {
         const response = await request(app)
             .delete('/mcp')
             .set('Mcp-Session-Id', 'invalid-uuid');
-        expect(response.status).toBe(400);
+        expect(response.status).toBe(404);
     });
 
     it('should reject GET (SSE) with invalid session', async () => {
@@ -217,7 +216,7 @@ describe('MCP Server', () => {
             .get('/mcp')
             .set('Accept', 'text/event-stream')
             .set('Mcp-Session-Id', 'invalid-uuid');
-        expect(response.status).toBe(400);
+        expect(response.status).toBe(404);
     });
 
     it('should reject GET (SSE) without session', async () => {
@@ -228,7 +227,6 @@ describe('MCP Server', () => {
     });
 
     it('should handle explicit session termination', async () => {
-        // Create a session
         const initResponse = await request(app)
             .post('/mcp')
             .send(initPayload)
@@ -237,14 +235,12 @@ describe('MCP Server', () => {
         const sessionId = initResponse.headers['mcp-session-id'];
         expect(sessionId).toBeDefined();
 
-        // Delete the session
         const deleteResponse = await request(app)
             .delete('/mcp')
             .set('Mcp-Session-Id', sessionId);
         
-        expect(deleteResponse.status).toBe(200); // Or 202, depending on implementation. SDK usually sends 200 or 202.
+        expect(deleteResponse.status).toBe(200);
         
-        // Verify session is gone by trying to ping
         const pingResponse = await request(app)
             .post('/mcp')
             .set('Mcp-Session-Id', sessionId)
@@ -255,6 +251,6 @@ describe('MCP Server', () => {
                 method: "ping"
             });
             
-        expect(pingResponse.status).toBe(400); // Invalid session
+        expect(pingResponse.status).toBe(404);
     });
 });

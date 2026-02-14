@@ -1,38 +1,18 @@
 import express, { Request, Response } from 'express';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { SessionManager } from './session.js';
 import { InMemoryEventStore } from './in-memory-event-store.js';
 import { randomUUID } from 'node:crypto';
-import { SERVER_NAME, SERVER_VERSION, SESSION_TIMEOUT_MS, ENDPOINT_PATH, PROTOCOL_VERSION } from '../meta.js';
+import { SERVER_NAME, SERVER_VERSION, ENDPOINT_PATH, PROTOCOL_VERSION } from '../meta.js';
 
-// Session management
-interface Session {
-    transport: StreamableHTTPServerTransport;
-    lastAccessed: number;
-}
-
-const sessions: Map<string, Session> = new Map();
-
-export async function createServer() {
+export function createHttpServer(mcpServer: McpServer) {
     const app = express();
-    
-    // Cleanup task
-    const cleanupInterval = setInterval(() => {
-        const now = Date.now();
-        for (const [id, session] of sessions.entries()) {
-            if (now - session.lastAccessed > SESSION_TIMEOUT_MS) {
-                console.log(`Session ${id} timed out`);
-                // Close transport? 
-                // session.transport.close(); // If method exists
-                sessions.delete(id);
-            }
-        }
-    }, 60000); // Check every minute
-    
+    const sessionManager = new SessionManager();
+
     // Origin validation middleware
     app.use((req, res, next) => {
         const origin = req.get('Origin');
-        // Allow no origin (e.g. curl) or localhost/127.0.0.1
         if (origin) {
             const url = new URL(origin);
             if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
@@ -43,18 +23,7 @@ export async function createServer() {
         next();
     });
 
-    // Body parser is needed for POST
     app.use(express.json());
-
-    const mcpServer = new McpServer({
-        name: SERVER_NAME,
-        version: SERVER_VERSION
-    }, {
-        capabilities: {
-            logging: {},
-            tools: { listChanged: true }
-        }
-    });
 
     app.get('/health', (req, res) => {
         res.json({ status: "healthy" });
@@ -62,7 +31,7 @@ export async function createServer() {
 
     app.get('/info', (req, res) => {
         const uptime = process.uptime();
-        const activeSessions = sessions.size;
+        const activeSessions = sessionManager.getActiveSessionCount();
         const html = `
         <!DOCTYPE html>
         <html>
@@ -72,34 +41,25 @@ export async function createServer() {
             <p><strong>Protocol Version:</strong> ${PROTOCOL_VERSION}</p>
             <p><strong>Active Sessions:</strong> ${activeSessions}</p>
             <p><strong>Uptime:</strong> ${Math.floor(uptime)} seconds</p>
-            <h2>Tools</h2>
-            <ul>
-                <li>add_two_numbers</li>
-            </ul>
         </body>
         </html>
         `;
         res.send(html);
     });
 
-
-    // We will register tools here or expose method to register tools
-    // For now, return both app and mcpServer so index can register tools
-    
     const handleMcpRequest = async (req: Request, res: Response) => {
         const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
-        // Valid protocol version check
         const protocolVersion = req.headers['mcp-protocol-version'] as string | undefined;
         if (protocolVersion && protocolVersion !== PROTOCOL_VERSION) {
-             // For strict compliance we should return 400, but let's just log for now to avoid breaking tools
+             // For strict compliance we should return 400
              // res.status(400).json({ error: 'Unsupported Protocol Version' });
              // return;
         }
 
         if (sessionId) {
-            if (sessions.has(sessionId)) {
-                sessions.get(sessionId)!.lastAccessed = Date.now();
+            if (sessionManager.hasSession(sessionId)) {
+                sessionManager.getSession(sessionId); 
             } else {
                 res.status(404).send('Session not found');
                 return;
@@ -110,27 +70,17 @@ export async function createServer() {
             let transport: StreamableHTTPServerTransport;
 
             if (sessionId) {
-                // Reuse existing transport (validated above)
-                transport = sessions.get(sessionId)!.transport;
+                transport = sessionManager.getSession(sessionId)!.transport;
             } else if (!sessionId && req.method === 'POST' && req.body.method === 'initialize') {
-                // Create NEW transport
                 const eventStore = new InMemoryEventStore();
                 transport = new StreamableHTTPServerTransport({
                     sessionIdGenerator: () => randomUUID(),
                     eventStore,
                     onsessioninitialized: (id) => {
-                        sessions.set(id, { transport, lastAccessed: Date.now() });
-                        console.log(`Session initialized: ${id}`);
-                        
-                        transport.onclose = () => {
-                             sessions.delete(id);
-                             console.log(`Session closed: ${id}`);
-                        };
+                        sessionManager.createSession(id, transport);
                     }
                 });
-
                 await mcpServer.connect(transport);
-
             } else {
                  res.status(400).json({ 
                      jsonrpc: '2.0', 
@@ -140,7 +90,6 @@ export async function createServer() {
                  return;
             }
 
-            // Handle the request
             await transport.handleRequest(req, res, req.body);
 
         } catch (error) {
@@ -150,6 +99,7 @@ export async function createServer() {
     };
 
     app.post(ENDPOINT_PATH, handleMcpRequest);
+    
     app.get(ENDPOINT_PATH, async (req, res) => {
         const accept = req.headers['accept'];
         if (!accept || !accept.includes('text/event-stream')) {
@@ -162,13 +112,12 @@ export async function createServer() {
             res.status(400).send('Missing session ID');
             return;
         }
-        if (!sessions.has(sessionId)) {
+        if (!sessionManager.hasSession(sessionId)) {
             res.status(404).send('Session not found');
             return;
         }
         
-        const session = sessions.get(sessionId)!;
-        session.lastAccessed = Date.now();
+        const session = sessionManager.getSession(sessionId)!;
         await session.transport.handleRequest(req, res);
     });
     
@@ -178,27 +127,21 @@ export async function createServer() {
             res.status(400).send('Missing session ID');
             return;
         }
-        if (!sessions.has(sessionId)) {
+        if (!sessionManager.hasSession(sessionId)) {
             res.status(404).send('Session not found');
             return;
         }
-
-        const session = sessions.get(sessionId)!;
+        const session = sessionManager.getSession(sessionId)!;
         await session.transport.handleRequest(req, res);
-        // Transport close logic should handle cleanup
-        sessions.delete(sessionId);
+        sessionManager.removeSession(sessionId);
     });
 
-    // 405 Method Not Allowed
     app.all(ENDPOINT_PATH, (req, res) => {
         res.status(405).send('Method Not Allowed');
     });
 
-    return { 
-        app, 
-        mcpServer,
-        shutdown: () => {
-            clearInterval(cleanupInterval);
-        }
+    return {
+        app,
+        shutdown: () => sessionManager.destroy()
     };
 }

@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTokenizePrompt } from '../../src/tools/tokenize-prompt/index.js';
 

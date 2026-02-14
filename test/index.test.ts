@@ -31,6 +31,11 @@ describe('Index Entry Point', () => {
             REGISTERED_TOOL_NAMES: ['add-two-numbers', 'welcome', 'greeting', 'hello-world']
         }));
 
+        jest.unstable_mockModule('../src/core/copilot-client.js', () => ({
+            initializeCopilotClient: jest.fn().mockResolvedValue(true),
+            shutdownCopilotClient: jest.fn().mockResolvedValue(true)
+        }));
+
         jest.unstable_mockModule('chalk', () => ({
             default: {
                 blue: (s: string) => s,

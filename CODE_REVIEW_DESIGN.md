@@ -239,6 +239,18 @@ const client = new CopilotClient();
 
 try {
     await client.start();
+
+    // Verify authentication explicitly
+    const authStatus = await client.getAuthStatus();
+    if (!authStatus.isAuthenticated) {
+        return {
+            isError: true,
+            content: [{ 
+                type: 'text', 
+                text: \`Authentication failed. Please run \\\`copilot auth login\\\` or set the COPILOT_GITHUB_TOKEN environment variable.\\nStatus: \${authStatus.statusMessage || 'Not logged in'}\` 
+            }]
+        };
+    }
     
     const session = await client.createSession({
         model: reviewModel,

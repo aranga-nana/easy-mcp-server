@@ -79,7 +79,11 @@ To ensure maintainability and modularity, follow this directory structure:
 
 Follow these steps to implement the server:
 
-1.  **Project Setup**: Initialize the project using the Reference `package.json` in Section 3.1.
+1.  **Project Setup & Audit**: 
+    *   Create `package.json` using the Reference in Section 3.1.
+    *   **CRITICAL**: Before installing, you **MUST** audit dependencies. Run `npm view <package> version` for every package to resolve the latest stable version compatible with the MCP SDK. Check for known vulnerabilities.
+    *   Update `package.json` with these specific versions (replacing the minimums).
+    *   Only then run `npm install`.
 2.  **Core Implementation**:
     *   Implement `src/meta.ts` and `src/core/in-memory-event-store.ts`.
     *   Implement modular core: `src/core/mcp-server.ts`, `src/core/session.ts`, `src/core/transport.ts`.

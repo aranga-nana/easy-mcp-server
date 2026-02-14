@@ -3,9 +3,9 @@ import { createAppAuth } from '@octokit/auth-app';
 
 let clientInstance: CopilotClient | null = null;
 const logger = {
-    info: (msg: string, meta?: any) => console.log(`[copilot-client] INFO: ${msg}`, meta ?? ''),
-    warn: (msg: string, meta?: any) => console.warn(`[copilot-client] WARN: ${msg}`, meta ?? ''),
-    error: (msg: string, meta?: any) => console.error(`[copilot-client] ERROR: ${msg}`, meta ?? '')
+    info: (msg: string, meta?: any) => console.log(`[copilot-client] INFO: ${msg}`, meta || ''),
+    warn: (msg: string, meta: any) => console.warn(`[copilot-client] WARN: ${msg}`, meta),
+    error: (msg: string, meta: any) => console.error(`[copilot-client] ERROR: ${msg}`, meta)
 };
 
 /**

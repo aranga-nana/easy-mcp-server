@@ -72,6 +72,63 @@ describe('Index Entry Point', () => {
         expect(mockListen).toHaveBeenCalledWith(DEFAULT_PORT, DEFAULT_HOST, expect.any(Function));
     });
 
+    it('should catch initialization errors', async () => {
+        const { initializeCopilotClient } = await import('../src/core/copilot-client.js');
+        // Mock it to throw
+        (initializeCopilotClient as jest.Mock).mockRejectedValueOnce(new Error('Init failed'));
+        
+        const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        
+        const { main } = await import('../src/index.js');
+        await main();
+        
+        expect(consoleSpy).toHaveBeenCalledWith(
+            expect.stringContaining('Copilot SDK initialization failed'), 
+            expect.any(Error)
+        );
+        consoleSpy.mockRestore();
+    });
+
+    it('should register SIGINT handler', async () => {
+        // Mock process.exit globally for this test
+        // @ts-ignore
+        const exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => {});
+
+        const processOnSpy = jest.spyOn(process, 'on').mockImplementation((event, listener) => {
+            if (event === 'SIGINT') {
+                // Execute the listener immediately to test coverage
+                // Wait for the async listener to complete?
+                // The listener in index.ts is async () => { await shutdown...; exit(0); }
+                // So calling it returns a promise. We should await it.
+                (listener as Function)();
+            }
+            return process;
+        });
+
+        const { shutdownCopilotClient } = await import('../src/core/copilot-client.js');
+        const { main } = await import('../src/index.js');
+        
+        await main();
+
+        expect(processOnSpy).toHaveBeenCalledWith('SIGINT', expect.any(Function));
+        
+        // We know the listener was called due to our mock implementation.
+        // It's async, so we might need to wait a tick? 
+        // But the listener in index.ts is NOT awaited by anyone. It's just registered.
+        // But our mock CALLS it synchronously. However, the listener BODY is async.
+        // So `await shutdown...` inside listener yields execution.
+        // Then process.exit happens on next tick.
+        
+        // Let's just wait a bit.
+        await new Promise(resolve => setTimeout(resolve, 10));
+
+        expect(shutdownCopilotClient).toHaveBeenCalled();
+        expect(exitSpy).toHaveBeenCalledWith(0);
+        
+        exitSpy.mockRestore();
+        processOnSpy.mockRestore();
+    });
+
     it('should auto-run when executed as main script', async () => {
         const originalArgv1 = process.argv[1];
         try {

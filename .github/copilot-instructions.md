@@ -87,12 +87,15 @@ Follow these steps to implement the server:
     *   Create a default tool `hello-world`. 
     *   Create `resources/hello-world/welcome.md` with welcome content.
     *   Implement the tool to read and return this file content as a text response.
-4.  **Tool Registration**: 
+4.  **Additional Tools**:
+    *   Implement `add-two-numbers` (simple arithmetic).
+    *   Implement `tokenize-prompt` (uses `js-tiktoken`).
+5.  **Tool Registration**: 
     *   Create `src/tools/index.ts` to export a `registerTools` function.
     *   Register all tools in `src/index.ts` seamlessly.
-5.  **Entry Point**: Create `src/index.ts` using the modular components.
-6.  **Verification**: Start the server and use the Example cURL Commands to verify connectivity.
-7.  **Integration Testing**: Implement robust integration tests for each tool that verify the full Streamable HTTP lifecycle (POST -> SSE).
+6.  **Entry Point**: Create `src/index.ts` using the modular components.
+7.  **Verification**: Start the server and use the Example cURL Commands to verify connectivity.
+8.  **Integration Testing**: Implement robust integration tests for each tool that verify the full Streamable HTTP lifecycle (POST -> SSE).
 
 ## 3.1 Reference Package Configuration
 
@@ -116,15 +119,20 @@ Use this configuration to ensure reproducible builds.
     "chalk": "^5.6.2",
     "express": "^5.2.1",
     "figlet": "^1.10.0",
+    "js-tiktoken": "^1.0.21",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@eslint/js": "^9.0.0",
     "@types/express": "^5.0.6",
     "@types/figlet": "^1.7.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.2.3",
+    "@types/supertest": "^6.0.3",
     "eslint": "^10.0.0",
+    "typescript-eslint": "^8.0.0",
     "jest": "^30.2.0",
+    "supertest": "^7.2.2",
     "ts-jest": "^29.4.6",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
@@ -132,9 +140,139 @@ Use this configuration to ensure reproducible builds.
 }
 ```
 
+**`tsconfig.json`**:
+```jsonc
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
+```
+
+**`eslint.config.mjs`**:
+```javascript
+import eslint from '@eslint/js';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+  eslint.configs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'error'
+    },
+    ignores: ["dist/**", "coverage/**", "jest.config.js"]
+  }
+);
+```
+
+**`jest.config.js`**:
+```javascript
+/** @type {import('ts-jest').JestConfigWithTsJest} */
+export default {
+  preset: 'ts-jest/presets/default-esm',
+  testEnvironment: 'node',
+  extensionsToTreatAsEsm: ['.ts'],
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
+  transform: {
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      {
+        useESM: true,
+      },
+    ],
+  },
+  coverageThreshold: {
+    global: {
+      branches: 100,
+      functions: 100,
+      lines: 100,
+      statements: 100,
+    },
+  },
+};
+```
+
 ## 4. Reference Implementation
 
 **Use these code snippets as the source of truth for your implementation.**
+
+### Core: Constants (`src/meta.ts`)
+```typescript
+export const PROTOCOL_VERSION = '2025-11-25';
+export const SERVER_NAME = 'easy-mcp-server';
+export const SERVER_VERSION = '1.0.0';
+export const DEFAULT_PORT = 8080;
+export const DEFAULT_HOST = '127.0.0.1';
+export const SESSION_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes
+export const ENDPOINT_PATH = '/mcp';
+```
+
+### Core: In-Memory Event Store (`src/core/in-memory-event-store.ts`)
+```typescript
+import { EventStore, StreamId, EventId } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+
+interface StoredEvent {
+  id: EventId;
+  streamId: StreamId;
+  message: JSONRPCMessage;
+}
+
+export class InMemoryEventStore implements EventStore {
+  private events: StoredEvent[] = [];
+  private nextId = 1;
+
+  async storeEvent(streamId: StreamId, message: JSONRPCMessage): Promise<EventId> {
+    const id = String(this.nextId++);
+    this.events.push({ id, streamId, message });
+    if (this.events.length > 10000) {
+        this.events.shift(); // Simple cap
+    }
+    return id;
+  }
+
+  async getStreamIdForEventId(eventId: EventId): Promise<StreamId | undefined> {
+    const event = this.events.find(e => e.id === eventId);
+    return event?.streamId;
+  }
+
+  async replayEventsAfter(
+    lastEventId: EventId, 
+    { send }: { send: (eventId: EventId, message: JSONRPCMessage) => Promise<void> }
+  ): Promise<StreamId> {
+    const lastEventIndex = this.events.findIndex(e => e.id === lastEventId);
+    
+    if (lastEventIndex === -1) {
+       throw new Error(`Event ID ${lastEventId} not found`);
+    }
+
+    const lastEvent = this.events[lastEventIndex];
+    const streamId = lastEvent.streamId;
+
+    const relevantEvents = this.events.slice(lastEventIndex + 1).filter(e => e.streamId === streamId);
+
+    for (const event of relevantEvents) {
+      await send(event.id, event.message);
+    }
+
+    return streamId;
+  }
+}
+```
 
 ### Core: MCP Server (`src/core/mcp-server.ts`)
 ```typescript
@@ -174,14 +312,49 @@ export class SessionManager {
             const now = Date.now();
             for (const [id, session] of this.sessions.entries()) {
                 if (now - session.lastAccessed > SESSION_TIMEOUT_MS) {
+                    console.log(`Session ${id} timed out`);
                     session.transport.close();
                     this.sessions.delete(id);
                 }
             }
-        }, 60000);
+        }, 60000); // Check every minute
     }
-    // ... implement createSession, getSession, removeSession, hasSession ...
-    destroy() { clearInterval(this.cleanupInterval); }
+
+    createSession(id: string, transport: StreamableHTTPServerTransport) {
+        this.sessions.set(id, { transport, lastAccessed: Date.now() });
+        transport.onclose = () => {
+            this.sessions.delete(id);
+            console.log(`Session closed: ${id}`);
+        };
+    }
+
+    getSession(id: string): Session | undefined {
+        const session = this.sessions.get(id);
+        if (session) {
+            session.lastAccessed = Date.now();
+        }
+        return session;
+    }
+
+    removeSession(id: string) {
+        const session = this.sessions.get(id);
+        if (session) {
+            session.transport.close();
+            this.sessions.delete(id);
+        }
+    }
+
+    hasSession(id: string): boolean {
+        return this.sessions.has(id);
+    }
+    
+    getActiveSessionCount(): number {
+        return this.sessions.size;
+    }
+    
+    destroy() {
+        clearInterval(this.cleanupInterval);
+    }
 }
 ```
 
@@ -189,32 +362,152 @@ export class SessionManager {
 ```typescript
 import express, { Request, Response } from 'express';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-// ... imports ...
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { SessionManager } from './session.js';
+import { InMemoryEventStore } from './in-memory-event-store.js';
+import { randomUUID } from 'node:crypto';
+import { SERVER_NAME, SERVER_VERSION, ENDPOINT_PATH, PROTOCOL_VERSION } from '../meta.js';
 
 export type McpServerFactory = () => McpServer;
 
 export function createHttpServer(serverFactory: McpServerFactory) {
     const app = express();
     const sessionManager = new SessionManager();
-    // ... middleware, health checks ...
 
-    // Important: Use explicit JSON middleware or handle it in transport if needed
+    // Origin validation middleware
+    app.use((req, res, next) => {
+        const origin = req.get('Origin');
+        if (origin) {
+            const url = new URL(origin);
+            if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
+                res.status(403).json({ error: 'Origin not allowed' });
+                return;
+            }
+        }
+        next();
+    });
+
     app.use(express.json());
 
+    app.get('/health', (req, res) => {
+        res.json({ status: "healthy" });
+    });
+
+    app.get('/info', (req, res) => {
+        const uptime = process.uptime();
+        const activeSessions = sessionManager.getActiveSessionCount();
+        const html = `
+        <!DOCTYPE html>
+        <html>
+        <head><title>${SERVER_NAME} Info</title></head>
+        <body>
+            <h1>${SERVER_NAME} v${SERVER_VERSION}</h1>
+            <p><strong>Protocol Version:</strong> ${PROTOCOL_VERSION}</p>
+            <p><strong>Active Sessions:</strong> ${activeSessions}</p>
+            <p><strong>Uptime:</strong> ${Math.floor(uptime)} seconds</p>
+        </body>
+        </html>
+        `;
+        res.send(html);
+    });
+
     const handleMcpRequest = async (req: Request, res: Response) => {
-        // ... Session handling ID logic ...
-        
-        // ... If new session:
-        // const mcpServer = serverFactory();
-        // await mcpServer.connect(transport);
+        // console.log(`[Transport] Handle ${req.method} ${req.path}`);
+        const sessionId = req.headers['mcp-session-id'] as string | undefined;
+
+        const protocolVersion = req.headers['mcp-protocol-version'] as string | undefined;
+        if (protocolVersion && protocolVersion !== PROTOCOL_VERSION) {
+             // For strict compliance we should return 400
+             // res.status(400).json({ error: 'Unsupported Protocol Version' });
+             // return;
+        }
+
+        if (sessionId) {
+            if (sessionManager.hasSession(sessionId)) {
+                sessionManager.getSession(sessionId); 
+            } else {
+                res.status(404).send('Session not found');
+                return;
+            }
+        }
+
+        try {
+            let transport: StreamableHTTPServerTransport;
+
+            if (sessionId) {
+                transport = sessionManager.getSession(sessionId)!.transport;
+            } else if (!sessionId && req.method === 'POST' && req.body.method === 'initialize') {
+                const eventStore = new InMemoryEventStore();
+                transport = new StreamableHTTPServerTransport({
+                    sessionIdGenerator: () => randomUUID(),
+                    eventStore,
+                    onsessioninitialized: (id) => {
+                        sessionManager.createSession(id, transport);
+                    }
+                });
+                const mcpServer = serverFactory();
+                await mcpServer.connect(transport);
+            } else {
+                 res.status(400).json({ 
+                     jsonrpc: '2.0', 
+                     error: { code: -32000, message: 'Missing Session ID' }, 
+                     id: null 
+                 });
+                 return;
+            }
+
+            await transport.handleRequest(req, res, req.body);
+
+        } catch (error) {
+            console.error("Error handling request", error);
+            if (!res.headersSent) res.status(500).json({ error: 'Internal Server Error' });
+        }
     };
 
-    app.post('/mcp', handleMcpRequest);
-    app.get('/mcp', /* SSE logic using session.transport.handleRequest */);
-    app.delete('/mcp', /* cleanup logic */);
+    app.post(ENDPOINT_PATH, handleMcpRequest);
+    
+    app.get(ENDPOINT_PATH, async (req, res) => {
+        const accept = req.headers['accept'];
+        if (!accept || !accept.includes('text/event-stream')) {
+            res.status(406).send('Not Acceptable');
+            return;
+        }
 
-    return { 
-        app, 
+        const sessionId = req.headers['mcp-session-id'] as string;
+        if (!sessionId) {
+            res.status(400).send('Missing session ID');
+            return;
+        }
+        if (!sessionManager.hasSession(sessionId)) {
+            res.status(404).send('Session not found');
+            return;
+        }
+        
+        const session = sessionManager.getSession(sessionId)!;
+        await session.transport.handleRequest(req, res);
+    });
+    
+    app.delete(ENDPOINT_PATH, async (req, res) => {
+        const sessionId = req.headers['mcp-session-id'] as string;
+        if (!sessionId) {
+            res.status(400).send('Missing session ID');
+            return;
+        }
+        if (!sessionManager.hasSession(sessionId)) {
+            res.status(404).send('Session not found');
+            return;
+        }
+        const session = sessionManager.getSession(sessionId)!;
+        await session.transport.handleRequest(req, res);
+        sessionManager.removeSession(sessionId);
+    });
+
+    app.all(ENDPOINT_PATH, (req, res) => {
+        res.status(405).send('Method Not Allowed');
+    });
+
+    return {
+        app,
         shutdown: () => sessionManager.destroy(),
         sessionManager // Expose for testing
     };
@@ -247,6 +540,76 @@ export function registerHelloWorld(server: McpServer) {
              }
         }
     );
+}
+```
+
+### Tool: Add Two Numbers (`src/tools/add-two-numbers/index.ts`)
+```typescript
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+
+export function registerAddTwoNumbers(server: McpServer) {
+    server.registerTool(
+        "add_two_numbers",
+        {
+            description: "Add two numbers",
+            inputSchema: z.object({
+                a: z.number(),
+                b: z.number()
+            })
+        },
+        async ({ a, b }) => {
+            return {
+                content: [{ type: "text", text: String(a + b) }]
+            };
+        }
+    );
+}
+```
+
+### Tool: Tokenize Prompt (`src/tools/tokenize-prompt/index.ts`)
+```typescript
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import { getEncoding } from 'js-tiktoken';
+
+export function registerTokenizePrompt(server: McpServer) {
+    server.registerTool(
+        "tokenize-prompt",
+        {
+            description: "Tokenize a prompt",
+            inputSchema: z.object({
+                prompt: z.string()
+            })
+        },
+        async ({ prompt }) => {
+            const enc = getEncoding("cl100k_base");
+            const tokens = enc.encode(prompt);
+            return {
+                content: [{ 
+                    type: "text", 
+                    text: JSON.stringify({
+                        tokens: Array.from(tokens),
+                        count: tokens.length
+                    })
+                }]
+            };
+        }
+    );
+}
+```
+
+### Tools Registry (`src/tools/index.ts`)
+```typescript
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerHelloWorld } from './hello-world/index.js';
+import { registerAddTwoNumbers } from './add-two-numbers/index.js';
+import { registerTokenizePrompt } from './tokenize-prompt/index.js';
+
+export function registerTools(server: McpServer) {
+    registerHelloWorld(server);
+    registerAddTwoNumbers(server);
+    registerTokenizePrompt(server);
 }
 ```
 

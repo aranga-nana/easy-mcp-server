@@ -4,8 +4,9 @@ import { REGISTERED_TOOL_NAMES, registerTools } from './tools/index.js';
 import { DEFAULT_PORT, DEFAULT_HOST, SERVER_NAME, SERVER_VERSION, PROTOCOL_VERSION, ENDPOINT_PATH, MCP_SDK_VERSION } from './meta.js';
 import chalk from 'chalk';
 import figlet from 'figlet';
+import { pathToFileURL } from 'node:url';
 
-async function main() {
+export async function main() {
     const serverFactory = () => {
         const server = createMcpServer();
         registerTools(server);
@@ -33,4 +34,7 @@ async function main() {
     });
 }
 
-main().catch(console.error);
+const mainModuleHref = process.argv[1] ? pathToFileURL(process.argv[1]).href : '';
+if (import.meta.url === mainModuleHref) {
+    main().catch(console.error);
+}

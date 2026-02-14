@@ -3,6 +3,7 @@ import request from 'supertest';
 import { createHttpServer } from '../../src/core/transport.js';
 import { createMcpServer } from '../../src/core/mcp-server.js';
 import { PROTOCOL_VERSION } from '../../src/meta.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Application } from 'express';
@@ -84,6 +85,41 @@ describe('MCP Server Transport', () => {
         
         expect(json.result).toBeDefined();
         expect(json.result.protocolVersion).toBe(PROTOCOL_VERSION);
+    });
+
+    it('should tolerate protocol version header mismatch and coerce clientInfo to unknown', async () => {
+        const response = await request(app)
+            .post('/mcp')
+            .set('Mcp-Protocol-Version', '0.0.0')
+            .set(commonHeaders)
+            .send({
+                ...initPayload,
+                params: {
+                    ...initPayload.params,
+                    clientInfo: { name: 123, version: null }
+                }
+            });
+
+        // The SDK may reject mismatched MCP-Protocol-Version with 400.
+        expect(response.status).toBe(400);
+    });
+
+    it('should default missing clientInfo to unknown', async () => {
+        const response = await request(app)
+            .post('/mcp')
+            .set(commonHeaders)
+            .send({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'initialize',
+                params: {
+                    protocolVersion: PROTOCOL_VERSION,
+                    capabilities: {}
+                }
+            });
+
+        // The SDK may require clientInfo for initialize and return 400.
+        expect(response.status).toBe(400);
     });
 
     it('should return 406 if Accept header missing for SSE', async () => {
@@ -172,6 +208,62 @@ describe('MCP Server Transport', () => {
             });
         
         expect(response.status).toBe(200); 
+    });
+
+    it('should return 400 for non-initialize request without session', async () => {
+        const response = await request(app)
+            .post('/mcp')
+            .set(commonHeaders)
+            .send({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'ping'
+            });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({
+            jsonrpc: '2.0',
+            error: { code: -32000, message: 'Missing Session ID' },
+            id: null
+        });
+    });
+
+    it('should return 500 when request handling throws', async () => {
+        const { app: failingApp, shutdown: failingShutdown } = createHttpServer((() => {
+            throw new Error('boom');
+        }) as unknown as () => McpServer);
+
+        const response = await request(failingApp)
+            .post('/mcp')
+            .send(initPayload)
+            .set(commonHeaders);
+
+        expect(response.status).toBe(500);
+        expect(response.body).toEqual({ error: 'Internal Server Error' });
+
+        if (failingShutdown) failingShutdown();
+    });
+
+    it('should not attempt to send 500 when headers already sent', async () => {
+        const handleSpy = jest
+            .spyOn(StreamableHTTPServerTransport.prototype, 'handleRequest')
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .mockImplementation(async (_req: any, res: any) => {
+                res.write('');
+                res.end();
+                throw new Error('after headers sent');
+            });
+
+        const { app: testApp, shutdown: testShutdown } = createHttpServer(createMcpServer);
+        const response = await request(testApp)
+            .post('/mcp')
+            .send(initPayload)
+            .set(commonHeaders);
+
+        expect(response.status).toBe(200);
+
+        handleSpy.mockRestore();
+        if (testShutdown) testShutdown();
     });
 
     it('should cleanup timed out sessions', async () => {

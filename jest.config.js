@@ -2,6 +2,7 @@
 export default {
   preset: 'ts-jest/presets/default-esm',
   testEnvironment: 'node',
+  roots: ['<rootDir>/test'],
   extensionsToTreatAsEsm: ['.ts'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
@@ -14,6 +15,8 @@ export default {
       },
     ],
   },
+  collectCoverage: true,
+  collectCoverageFrom: ['src/**/*.ts'],
   coverageThreshold: {
     global: {
       branches: 100,

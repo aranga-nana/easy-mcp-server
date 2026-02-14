@@ -60,6 +60,7 @@ Run and fix until all pass:
 1. `npm run build`
 2. `npm run lint`
 3. `npm test`
+4. `npm run test:coverage` (must exist and must enforce 100% global coverage)
 
 Then perform protocol smoke checks against Streamable HTTP spec behavior:
 1. Initialize (`POST /mcp`)
@@ -73,6 +74,8 @@ Compare generated project against expected implementation described in `.github/
 - Same tool names and registration wiring.
 - Same transport/session lifecycle behavior.
 - 100% Jest coverage threshold passing.
+- `test:coverage` script exists (e.g., `npm test -- --coverage`).
+- Jest is configured to actually collect coverage from `src/**/*.ts` (so thresholds are enforced).
 
 ## Output Format
 Return:

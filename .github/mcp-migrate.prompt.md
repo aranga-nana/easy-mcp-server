@@ -42,12 +42,14 @@ Migrate any workspace to MCP Protocol `2025-11-25` and make it match the full ta
 	- MCP protocol version
 	- Tool names in orange as bullet points (one per line, prefixed with `- `); omit Copilot-only aliases to avoid duplicates
 9. Ensure tests mirror `src/` and maintain 100% coverage thresholds.
+10. Add a `test:coverage` script (e.g., `npm test -- --coverage`) and configure Jest to collect coverage from `src/**/*.ts` so thresholds are enforced.
 
 ## Verification
 Run and fix until all pass:
 1. `npm run build`
 2. `npm run lint`
 3. `npm test`
+4. `npm run test:coverage`
 
 Then run protocol checks (initialize, SSE, tools/call, delete session) following the Streamable HTTP spec link in instructions.
 

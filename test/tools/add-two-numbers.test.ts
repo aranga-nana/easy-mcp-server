@@ -60,5 +60,12 @@ describe('add_two_numbers tool', () => {
         const aliasError = await aliasHandler({ prompt: 'add ten and twenty' });
         expect(aliasError.isError).toBe(true);
         expect(aliasError.content?.[0]?.type).toBe('text');
+
+        // Cover non-finite number handling (Number("9" repeated) can parse to Infinity).
+        const huge = '9'.repeat(4000);
+        const nonFinite = await canonicalHandler({ prompt: `add ${huge} and ${huge}` });
+        expect(nonFinite.isError).toBe(true);
+        expect(nonFinite.content?.[0]?.type).toBe('text');
+        expect(nonFinite.content?.[0]?.text).toContain('not valid');
     });
 });

@@ -1,5 +1,6 @@
 import { jest } from '@jest/globals';
 import { DEFAULT_PORT, DEFAULT_HOST } from '../src/meta.js';
+import { fileURLToPath } from 'node:url';
 
 describe('Index Entry Point', () => {
     let mockListen: any;
@@ -27,15 +28,32 @@ describe('Index Entry Point', () => {
         }));
         jest.unstable_mockModule('../src/tools/index.js', () => ({
             registerTools: registerToolsMock,
-            REGISTERED_TOOL_NAMES: ['hello-world']
+            REGISTERED_TOOL_NAMES: ['add-two-numbers', 'welcome', 'greeting', 'hello-world']
         }));
 
-        await import('../src/index.js');
-        // Wait for async execution
-        await new Promise(process.nextTick);
+        jest.unstable_mockModule('chalk', () => ({
+            default: {
+                blue: (s: string) => s,
+                bold: (s: string) => s,
+                cyan: (s: string) => s,
+                green: (s: string) => s,
+                yellow: (s: string) => s,
+                rgb: () => (s: string) => s,
+            }
+        }));
+
+        jest.unstable_mockModule('figlet', () => ({
+            default: {
+                textSync: (s: string) => s,
+            }
+        }));
     });
 
-    it('should start server and register tools', () => {
+    it('should start server and register tools', async () => {
+        // Import after mocks are set.
+        const mod = await import('../src/index.js');
+        await mod.main();
+
         expect(createHttpServerMock).toHaveBeenCalledWith(expect.any(Function));
         
         // Get the factory function passed to createHttpServer
@@ -47,5 +65,27 @@ describe('Index Entry Point', () => {
         expect(server).toBe(mockMcpServer);
         
         expect(mockListen).toHaveBeenCalledWith(DEFAULT_PORT, DEFAULT_HOST, expect.any(Function));
+    });
+
+    it('should auto-run when executed as main script', async () => {
+        const originalArgv1 = process.argv[1];
+        try {
+            process.argv[1] = fileURLToPath(new URL('../src/index.ts', import.meta.url));
+            await import('../src/index.js');
+        } finally {
+            process.argv[1] = originalArgv1;
+        }
+
+        expect(mockListen).toHaveBeenCalledWith(DEFAULT_PORT, DEFAULT_HOST, expect.any(Function));
+    });
+
+    it('should not crash when argv[1] is falsy', async () => {
+        const originalArgv1 = process.argv[1];
+        try {
+            process.argv[1] = '';
+            await import('../src/index.js');
+        } finally {
+            process.argv[1] = originalArgv1;
+        }
     });
 });

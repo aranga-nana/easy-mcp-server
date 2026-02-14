@@ -15,3 +15,4 @@ I need you to refactor this existing workspace to conform to the Model Context P
 **Output**: Report "Migration Complete. Server is ready on Protocol 2025-11-25." and list the specific files that were moved or modified.
 
 Begin.
+

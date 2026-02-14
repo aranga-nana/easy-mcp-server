@@ -50,7 +50,14 @@ To ensure maintainability and modularity, follow this directory structure:
     *   All hardcoded values (Protocol Versions, Helper Keys, Timeouts) MUST be isolated here.
 4.  **Tests**:
     *   Mirror source structure (e.g., `src/core/file.ts` -> `test/core/file.test.ts`).
-    *   Maintain 100% code coverage.
+    *   **Strict Coverage**: Maintain 100% code coverage (Statements, Branches, Functions, Lines).
+    *   **Integration Tests**: Every tool MUST have a corresponding integration test (e.g., `test/tools/<tool-name>.test.ts`) that verifies the tool's end-to-end functionality.
+
+## 2.1 Code Quality Assurance
+
+*   **Strict Typing**: The project MUST use strict TypeScript configuration. Usage of `any` is strictly prohibited.
+*   **Test Coverage**: The build pipeline MUST fail if test coverage drops below 100%.
+*   **Tool Verification**: Whenever a new tool is added, you MUST add a corresponding integration test case.
 
 ## 3. Step-by-Step Implementation Guide
 

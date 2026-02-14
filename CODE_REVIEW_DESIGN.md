@@ -150,7 +150,7 @@ export GITHUB_TOKEN="ghp_xxx..."
 export CODE_REVIEW_MODEL="claude-sonnet-4.5"
 
 # Resource Limits (optional)
-export CODE_REVIEW_MAX_FILES=5          # Max files per review
+export CODE_REVIEW_MAX_FILES=50         # Max files per review
 export CODE_REVIEW_MAX_FILE_SIZE=50000  # Max bytes per file
 export CODE_REVIEW_TIMEOUT=60000        # Timeout in ms (60s)
 ```
@@ -176,8 +176,8 @@ const inputSchema = z.object({
     content: z.string().describe('Full file content to review')
   }))
   .min(1)
-  .max(5)
-  .describe('Array of files to review. Client must provide file names and content. Maximum 5 files per review.')
+  .max(50)
+  .describe('Array of files to review. Client must provide file names and content. Maximum 50 files per review.')
 });
 ```
 
@@ -197,7 +197,7 @@ if (!files || files.length === 0) {
     };
 }
 
-const MAX_FILES = parseInt(process.env.CODE_REVIEW_MAX_FILES ?? '5', 10);
+const MAX_FILES = parseInt(process.env.CODE_REVIEW_MAX_FILES ?? '50', 10);
 const MAX_FILE_SIZE = parseInt(process.env.CODE_REVIEW_MAX_FILE_SIZE ?? '50000', 10);
 
 if (files.length > MAX_FILES) {
@@ -283,13 +283,13 @@ This file will contain the "Instructions" mentioned in the requirements. It serv
 ### 8.1 Payload Size Limits
 **Issue**: Large file sets or files can exceed context windows.  
 **Resource Limits**:
-- `CODE_REVIEW_MAX_FILES=5` (max files per review)
+- `CODE_REVIEW_MAX_FILES=50` (max files per review)
 - `CODE_REVIEW_MAX_FILE_SIZE=50000` (50 KB per file)
-- **Total context limit**: ~250 KB (5 files × 50 KB)
+- **Total context limit**: ~2.5 MB (50 files × 50 KB)
 
 **Implementation**:
 ```typescript
-const MAX_FILES = parseInt(process.env.CODE_REVIEW_MAX_FILES ?? '5', 10);
+const MAX_FILES = parseInt(process.env.CODE_REVIEW_MAX_FILES ?? '50', 10);
 const MAX_FILE_SIZE = parseInt(process.env.CODE_REVIEW_MAX_FILE_SIZE ?? '50000', 10);
 
 if (targetFiles.length > MAX_FILES) {
@@ -354,7 +354,7 @@ for (const file of files) {
 **Mitigation**:
 ```typescript
 const MAX_FILE_SIZE = parseInt(process.env.CODE_REVIEW_MAX_FILE_SIZE ?? '50000', 10);
-const MAX_TOTAL_SIZE = MAX_FILES * MAX_FILE_SIZE; // 250 KB default
+const MAX_TOTAL_SIZE = MAX_FILES * MAX_FILE_SIZE; // 2.5 MB default
 
 let totalSize = 0;
 for (const file of files) {
@@ -403,10 +403,10 @@ interface CodeReviewInput {
 ```
 
 **Requirements**:
-- `files` array is **required** and must contain 1-5 files
+- `files` array is **required** and must contain 1-50 files
 - `name` must be a relative path (no absolute paths, no ".." traversal)
 - `content` must not exceed `CODE_REVIEW_MAX_FILE_SIZE` (default: 50 KB)
-- Total content across all files must not exceed 250 KB
+- Total content across all files must not exceed 2.5 MB
 
 **Client Responsibilities**:
 - IDE plugin must detect modified/relevant files
@@ -699,7 +699,8 @@ Be concise but actionable. Prioritize security and correctness over style.`;
 
 ### 14.1 Expected Latency
 - **Single file (<1000 lines)**: 5-10 seconds
-- **5 files**: 15-30 seconds
+- **10 files**: 20-40 seconds
+- **50 files**: 60-120 seconds
 - **With extended thinking**: +10-20 seconds
 
 ### 14.2 Token Usage Estimates

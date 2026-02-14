@@ -12,6 +12,13 @@
 *   **Tools (`src/tools/`)**: `index.ts` (Registry), `src/tools/<name>/` (Impl).
 *   **Resources**: `resources/<tool-name>/`.
 *   **Meta**: `src/meta.ts` (Constants).
+*   **Tests (`test/`)**: All tests live in the `test/` folder and **mirror the `src/` directory structure**. Test files use the `.test.ts` suffix.
+    *   `test/index.test.ts` → tests `src/index.ts`
+    *   `test/core/transport.test.ts` → tests `src/core/transport.ts`
+    *   `test/core/in-memory-event-store.test.ts` → tests `src/core/in-memory-event-store.ts`
+    *   `test/tools/hello-world.test.ts` → tests `src/tools/hello-world/index.ts`
+    *   `test/integration/` → integration/E2E tests and shared test utilities (`test-utils.ts`)
+    *   Do **NOT** place tests inside `src/` (e.g. no `src/__tests__/`).
 
 ## 2. Reference Configuration
 **`package.json`** (Base - MUST Audit Versions):
@@ -30,7 +37,7 @@
 
 **`eslint.config.mjs`**: `import eslint from '@eslint/js'; import tseslint from 'typescript-eslint'; export default tseslint.config(eslint.configs.recommended, ...tseslint.configs.recommended, { rules: { '@typescript-eslint/no-explicit-any': 'error' }, ignores: ["dist/**", "coverage/**", "jest.config.js"] });`
 
-**`jest.config.js`**: `export default { preset: 'ts-jest/presets/default-esm', testEnvironment: 'node', extensionsToTreatAsEsm: ['.ts'], moduleNameMapper: { '^(\\.{1,2}/.*)\\.js$': '$1' }, transform: { '^.+\\.tsx?$': ['ts-jest', { useESM: true }] }, coverageThreshold: { global: { branches: 100, functions: 100, lines: 100, statements: 100 } } };`
+**`jest.config.js`**: `export default { preset: 'ts-jest/presets/default-esm', testEnvironment: 'node', roots: ['<rootDir>/test'], extensionsToTreatAsEsm: ['.ts'], moduleNameMapper: { '^(\\.{1,2}/.*)\\.js$': '$1' }, transform: { '^.+\\.tsx?$': ['ts-jest', { useESM: true }] }, coverageThreshold: { global: { branches: 100, functions: 100, lines: 100, statements: 100 } } };`
 
 ## 3. Reference Implementation
 **`src/meta.ts`**:

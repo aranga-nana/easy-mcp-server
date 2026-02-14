@@ -10,7 +10,7 @@ I need you to refactor this existing workspace to conform to the Model Context P
 1. **Analysis**: Scan the current codebase. Identify existing tool logic or API endpoints.
 2. **Migration Strategy**: Strictly apply "Section 0.5 Migration Strategy" from `.github/copilot-instructions.md`. Move files and update imports to the new SDK.
 3. **Logic Preservation**: Do not delete existing business logic; wrap it in the new `mcp.tool()` definitions as required by the instructions.
-4. **Quality Gates**: Refactor any loose types to strict TypeScript (no `any`). Ensure 100% test coverage by adding missing tests.
+4. **Quality Gates**: Refactor any loose types to strict TypeScript (no `any`), rename files to `kebab-case` if necessary, and ensure 100% test coverage by adding missing tests.
 5. **Integration Assurance**: For every tool migrated, create a dedicated integration test.
 6. **Fix & Verify**: Auto-fix any breaking changes or linting errors caused by the move, and run the test suite to confirm 100% pass rate.
 

@@ -58,6 +58,7 @@ To ensure maintainability and modularity, follow this directory structure:
 *   **Strict Typing**: The project MUST use strict TypeScript configuration. Usage of `any` is strictly prohibited.
 *   **Test Coverage**: The build pipeline MUST fail if test coverage drops below 100%.
 *   **Tool Verification**: Whenever a new tool is added, you MUST add a corresponding integration test case.
+*   **Naming Convention**: All file names MUST use `kebab-case` (e.g., `my-file-name.ts`), NOT `CamelCase` or `PascalCase`.
 
 ## 3. Step-by-Step Implementation Guide
 

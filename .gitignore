@@ -1,0 +1,15 @@
+
+# Explicitly include .github folder
+!/.github/
+
+node_modules
+coverage
+dist
+.env
+.env.local
+.DS_Store
+.vscode
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log* 

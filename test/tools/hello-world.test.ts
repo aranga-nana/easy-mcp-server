@@ -18,7 +18,7 @@ describe('hello-world tool', () => {
     it('should return welcome message', async () => {
         // Mock the implementation to intercept call
         let toolHandler: any;
-        const toolSpy = jest.spyOn(server, 'tool').mockImplementation(((...args: any[]) => {
+        const toolSpy = jest.spyOn(server, 'registerTool').mockImplementation(((...args: any[]) => {
             const name = args[0] as string;
             const handler = args[2];
              if (name === 'hello-world') {

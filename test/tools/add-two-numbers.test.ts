@@ -25,7 +25,7 @@ describe('add_two_numbers tool', () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let toolHandler: any;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const toolSpy = jest.spyOn(server, 'tool').mockImplementation(((...args: any[]) => {
+        const toolSpy = jest.spyOn(server, 'registerTool').mockImplementation(((...args: any[]) => {
             const name = args[0] as string;
             const handler = args[2];
              if (name === 'add_two_numbers') {

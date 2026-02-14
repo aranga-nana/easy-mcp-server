@@ -66,7 +66,7 @@ To ensure maintainability and modularity, follow this directory structure:
     *   Mirror source structure (e.g., `src/core/transport.ts` -> `test/core/transport.test.ts`).
     *   **Strict Coverage**: Maintain 100% code coverage.
     *   **Integration Tests**: Every tool MUST have a corresponding integration test in `test/integration/tools/`.
-    *   **Test Utilities**: Use `test/integration/test-utils.ts` (if applicable) or standard `http.request` for testing Streamable HTTP to handle SSE correctly.
+    *   **Test Utilities**: Use the simplified `McpTestClient` approach that handles the full state machine (initialize -> notification -> call). See `test/integration/test-utils.ts` pattern in the implemented server or use `http` module directly to handle SSE stream buffering, as some test frameworks struggle with infinite SSE streams. The client MUST send `Accept: application/json, text/event-stream` on all POST requests.
 
 ## 2.1 Code Quality Assurance
 
@@ -119,6 +119,9 @@ Use this configuration to ensure reproducible builds.
     "dev": "tsx watch src/index.ts",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "lint": "eslint src/ --fix"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
@@ -474,6 +477,7 @@ export function createHttpServer(serverFactory: McpServerFactory) {
     
     app.get(ENDPOINT_PATH, async (req, res) => {
         const accept = req.headers['accept'];
+        // Strict header validation: clients MUST accept text/event-stream
         if (!accept || !accept.includes('text/event-stream')) {
             res.status(406).send('Not Acceptable');
             return;
@@ -531,7 +535,9 @@ export function registerHelloWorld(server: McpServer) {
     server.registerTool(
         "hello-world",
         {
-            prompt: z.string().describe("The prompt from the user")
+            inputSchema: z.object({
+                prompt: z.string().describe("The prompt from the user")
+            })
         },
         async ({ prompt }) => {
              // Implementation
@@ -691,11 +697,31 @@ sequenceDiagram
 
 **Initialize:**
 ```bash
+# 1. Initialize
 curl -i -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -H "MCP-Protocol-Version: 2025-11-25" \
   -d '{ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "curl", "version": "1.0"} } }'
+
+# Note: Extract Session ID from 'Mcp-Session-Id' header in response
+
+# 2. Connect SSE (Background)
+curl -N -H "Accept: text/event-stream" -H "Mcp-Session-Id: <SESSION_ID>" http://localhost:8080/mcp &
+
+# 3. Send Initialized Notification (Required)
+curl -X POST "http://localhost:8080/mcp?sessionId=<SESSION_ID>" \
+  -H "Content-Type: application/json" \
+  -H "Mcp-Session-Id: <SESSION_ID>" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{ "jsonrpc": "2.0", "method": "notifications/initialized" }'
+
+# 4. Call Tool
+curl -X POST "http://localhost:8080/mcp?sessionId=<SESSION_ID>" \
+  -H "Content-Type: application/json" \
+  -H "Mcp-Session-Id: <SESSION_ID>" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{ "jsonrpc": "2.0", "id": "msg-1", "method": "tools/call", "params": { "name": "hello-world", "arguments": { "prompt": "hi" } } }'
 ```
 
 **DIRECTIVE**: Compare generated code with the Reference Implementation above for structural correctness.

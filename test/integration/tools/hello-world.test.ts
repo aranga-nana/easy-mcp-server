@@ -34,10 +34,13 @@ describe('Hello World Tool Integration', () => {
     };
 
     beforeAll(async () => {
-        const mcpServer = createMcpServer();
-        registerHelloWorld(mcpServer);
-        
-        const result = createHttpServer(mcpServer);
+        const serverFactory = () => {
+            const server = createMcpServer();
+            registerHelloWorld(server);
+            return server;
+        };
+
+        const result = createHttpServer(serverFactory);
         app = result.app;
         shutdown = result.shutdown;
         sessionManager = result.sessionManager;

@@ -6,10 +6,12 @@ import chalk from 'chalk';
 import figlet from 'figlet';
 
 async function main() {
-    const mcpServer = createMcpServer();
-    const { app } = createHttpServer(mcpServer);
-
-    registerTools(mcpServer);
+    const serverFactory = () => {
+        const server = createMcpServer();
+        registerTools(server);
+        return server;
+    };
+    const { app } = createHttpServer(serverFactory);
 
     app.listen(DEFAULT_PORT, DEFAULT_HOST, () => {
         console.log(chalk.blue(figlet.textSync(SERVER_NAME, { horizontalLayout: 'full' })));

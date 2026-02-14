@@ -33,6 +33,12 @@ You are acting as an autonomous senior developer. You must execute the instructi
 3.  **Completeness**: Write full, working code. **NEVER** use placeholders like `// ... rest of code` or `/* implementation details */`.
 4.  **Inference**: If a detail is missing, infer the best practice solution based on the "Specification Alignment" in Section 0 and proceed.
 
+## 0.7. Compatibility Status
+
+*   **Verified SDK**: `@modelcontextprotocol/sdk` v1.26.0
+*   **Verification**: The project has been verified to build and pass all tests (integration and unit) with this SDK version. 
+*   **Architecture Note**: Due to stateful behavior in newer SDK versions, the server implementation MUST use a Factory Pattern for `McpServer` instantiation per session, as reflected in the Reference Implementation.
+
 ## 1. Overview & Protocol Version
 
 *   **Transport**: Streamable HTTP (Single endpoint for POST/GET/DELETE)
@@ -106,22 +112,22 @@ Use this configuration to ensure reproducible builds.
     "lint": "eslint src/ --fix"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.1",
-    "chalk": "^5.3.0",
-    "express": "^4.21.1",
-    "figlet": "^1.8.0",
-    "zod": "^3.23.8"
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "chalk": "^5.6.2",
+    "express": "^5.2.1",
+    "figlet": "^1.10.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
-    "@types/figlet": "^1.5.8",
-    "@types/jest": "^29.5.14",
-    "@types/node": "^22.9.0",
-    "eslint": "^9.15.0",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.2.5",
-    "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "@types/express": "^5.0.6",
+    "@types/figlet": "^1.7.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.2.3",
+    "eslint": "^10.0.0",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   }
 }
 ```
@@ -185,7 +191,9 @@ import express, { Request, Response } from 'express';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 // ... imports ...
 
-export function createHttpServer(mcpServer: McpServer) {
+export type McpServerFactory = () => McpServer;
+
+export function createHttpServer(serverFactory: McpServerFactory) {
     const app = express();
     const sessionManager = new SessionManager();
     // ... middleware, health checks ...
@@ -195,8 +203,10 @@ export function createHttpServer(mcpServer: McpServer) {
 
     const handleMcpRequest = async (req: Request, res: Response) => {
         // ... Session handling ID logic ...
-        // ... Transport creation using StreamableHTTPServerTransport ...
-        // ... mcpServer.connect(transport) ...
+        
+        // ... If new session:
+        // const mcpServer = serverFactory();
+        // await mcpServer.connect(transport);
     };
 
     app.post('/mcp', handleMcpRequest);
@@ -248,10 +258,13 @@ import { registerTools } from './tools/index.js';
 // ... imports ...
 
 async function main() {
-    const mcpServer = createMcpServer();
-    const { app } = createHttpServer(mcpServer);
+    const serverFactory = () => {
+        const server = createMcpServer();
+        registerTools(server);
+        return server;
+    };
 
-    registerTools(mcpServer);
+    const { app } = createHttpServer(serverFactory);
 
     app.listen(DEFAULT_PORT, DEFAULT_HOST, () => {
         // ... Banner logic ...

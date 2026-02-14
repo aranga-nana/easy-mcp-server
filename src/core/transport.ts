@@ -6,7 +6,9 @@ import { InMemoryEventStore } from './in-memory-event-store.js';
 import { randomUUID } from 'node:crypto';
 import { SERVER_NAME, SERVER_VERSION, ENDPOINT_PATH, PROTOCOL_VERSION } from '../meta.js';
 
-export function createHttpServer(mcpServer: McpServer) {
+export type McpServerFactory = () => McpServer;
+
+export function createHttpServer(serverFactory: McpServerFactory) {
     const app = express();
     const sessionManager = new SessionManager();
 
@@ -81,6 +83,7 @@ export function createHttpServer(mcpServer: McpServer) {
                         sessionManager.createSession(id, transport);
                     }
                 });
+                const mcpServer = serverFactory();
                 await mcpServer.connect(transport);
             } else {
                  res.status(400).json({ 

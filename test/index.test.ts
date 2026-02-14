@@ -35,9 +35,16 @@ describe('Index Entry Point', () => {
     });
 
     it('should start server and register tools', () => {
+        expect(createHttpServerMock).toHaveBeenCalledWith(expect.any(Function));
+        
+        // Get the factory function passed to createHttpServer
+        const factory = createHttpServerMock.mock.calls[0][0];
+        const server = factory();
+        
         expect(createMcpServerMock).toHaveBeenCalled();
-        expect(createHttpServerMock).toHaveBeenCalledWith(mockMcpServer);
         expect(registerToolsMock).toHaveBeenCalledWith(mockMcpServer);
+        expect(server).toBe(mockMcpServer);
+        
         expect(mockListen).toHaveBeenCalledWith(DEFAULT_PORT, DEFAULT_HOST, expect.any(Function));
     });
 });

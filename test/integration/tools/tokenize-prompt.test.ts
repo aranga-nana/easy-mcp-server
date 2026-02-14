@@ -32,10 +32,13 @@ describe('Tokenize Prompt Tool Integration', () => {
     };
 
     beforeAll(async () => {
-        const mcpServer = createMcpServer();
-        registerTokenizePrompt(mcpServer);
+        const serverFactory = () => {
+            const server = createMcpServer();
+            registerTokenizePrompt(server);
+            return server;
+        };
         
-        const result = createHttpServer(mcpServer);
+        const result = createHttpServer(serverFactory);
         app = result.app;
         shutdown = result.shutdown;
         sessionManager = result.sessionManager;

@@ -32,10 +32,13 @@ describe('Add Two Numbers Tool Integration', () => {
     };
 
     beforeAll(async () => {
-        const mcpServer = createMcpServer();
-        registerAddTwoNumbers(mcpServer);
-        
-        const result = createHttpServer(mcpServer);
+        const serverFactory = () => {
+            const server = createMcpServer();
+            registerAddTwoNumbers(server);
+            return server;
+        };
+
+        const result = createHttpServer(serverFactory);
         app = result.app;
         shutdown = result.shutdown;
         sessionManager = result.sessionManager;

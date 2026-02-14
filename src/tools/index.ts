@@ -1,17 +1,16 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerAddTwoNumbers } from './add-two-numbers/index.js';
-import { registerTokenizePrompt } from './tokenize-prompt/index.js';
 import { registerHelloWorld } from './hello-world/index.js';
 
 export const REGISTERED_TOOL_NAMES = [
     'add_two_numbers',
     'add-two-numbers',
-    'tokenize-prompt',
-    'hello-world'
+    'hello-world',
+    'welcome',
+    'greeting'
 ] as const;
 
 export function registerTools(server: McpServer) {
     registerAddTwoNumbers(server);
-    registerTokenizePrompt(server);
     registerHelloWorld(server);
 }

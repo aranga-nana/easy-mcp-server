@@ -19,10 +19,11 @@ Create the complete project from an empty workspace (no `src/`, `test/`, or `res
 1. Read `.github/copilot-instructions.md` fully before writing files.
 2. Build the exact project structure and behavior expected by current repository parity:
    - Core transport/session/event-store/meta/index files.
-   - Tool registry with `hello-world`, `add_two_numbers`, and `tokenize-prompt` implementations.
+   - Tool registry with `hello-world` and `add_two_numbers` implementations.
      - Tools must be registered via `server.registerTool()` with `zod` schemas.
      - Tool handlers must return a valid `CallToolResult` including `content` (and may include `structuredContent`).
-    - Also register `add-two-numbers` for Copilot UX; prefer a single `prompt: string` input so the full user prompt is passed to the server for number extraction.
+      - `add_two_numbers` must accept a single `prompt: string` input so the full user prompt is passed to the server for number extraction.
+      - Also register `add-two-numbers` as a Copilot UX alias with the same `prompt: string` input/behavior.
    - Resource file: `resources/hello-world/welcome.md`.
    - Unit + integration tests under `test/` mirroring `src/`.
 3. Use strict TypeScript and kebab-case file names.
@@ -40,7 +41,7 @@ Create the complete project from an empty workspace (no `src/`, `test/`, or `res
    - Server version
    - MCP SDK version
    - MCP protocol version
-   - All registered tool names in orange as bullet points (one per line, prefixed with `- `)
+   - Tool names in orange as bullet points (one per line, prefixed with `- `); omit Copilot-only aliases to avoid duplicates
 
 ## Dependency Audit (Mandatory)
 1. Create base `package.json`.

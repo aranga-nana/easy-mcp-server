@@ -6,6 +6,7 @@ import { InMemoryEventStore } from './in-memory-event-store.js';
 import { randomUUID } from 'node:crypto';
 import { MCP_SDK_VERSION, SERVER_NAME, SERVER_VERSION, ENDPOINT_PATH, PROTOCOL_VERSION } from '../meta.js';
 import { createHttpLoggerMiddleware } from './logger.js';
+import { runWithRequestContext } from './request-context.js';
 
 export type McpServerFactory = () => McpServer;
 
@@ -80,12 +81,17 @@ export function createHttpServer(serverFactory: McpServerFactory) {
             if (sessionId) {
                 transport = sessionManager.getSession(sessionId)!.transport;
             } else if (!sessionId && req.method === 'POST' && req.body.method === 'initialize') {
+                const rawClientInfo = (req.body?.params?.clientInfo ?? {}) as { name?: unknown; version?: unknown };
+                const clientInfo = {
+                    name: typeof rawClientInfo.name === 'string' ? rawClientInfo.name : 'unknown',
+                    version: typeof rawClientInfo.version === 'string' ? rawClientInfo.version : 'unknown'
+                };
                 const eventStore = new InMemoryEventStore();
                 transport = new StreamableHTTPServerTransport({
                     sessionIdGenerator: () => randomUUID(),
                     eventStore,
                     onsessioninitialized: (id) => {
-                        sessionManager.createSession(id, transport);
+                        sessionManager.createSession(id, transport, { clientInfo });
                     }
                 });
                 const mcpServer = serverFactory();
@@ -99,7 +105,11 @@ export function createHttpServer(serverFactory: McpServerFactory) {
                  return;
             }
 
-            await transport.handleRequest(req, res, req.body);
+            const activeSession = sessionId ? sessionManager.getSession(sessionId) : undefined;
+            await runWithRequestContext(
+                { sessionId, clientInfo: activeSession?.clientInfo },
+                () => transport.handleRequest(req, res, req.body)
+            );
 
         } catch (error) {
             console.error("Error handling request", error);
@@ -127,7 +137,10 @@ export function createHttpServer(serverFactory: McpServerFactory) {
         }
         
         const session = sessionManager.getSession(sessionId)!;
-        await session.transport.handleRequest(req, res);
+        await runWithRequestContext(
+            { sessionId, clientInfo: session.clientInfo },
+            () => session.transport.handleRequest(req, res)
+        );
     });
     
     app.delete(ENDPOINT_PATH, async (req, res) => {
@@ -141,7 +154,10 @@ export function createHttpServer(serverFactory: McpServerFactory) {
             return;
         }
         const session = sessionManager.getSession(sessionId)!;
-        await session.transport.handleRequest(req, res);
+        await runWithRequestContext(
+            { sessionId, clientInfo: session.clientInfo },
+            () => session.transport.handleRequest(req, res)
+        );
         sessionManager.removeSession(sessionId);
     });
 

@@ -23,8 +23,8 @@ Migrate any workspace to MCP Protocol `2025-11-25` and make it match the full ta
 5. Ensure tool registry and names match parity target:
 	- `hello-world`
 	- `add_two_numbers`
-	- `tokenize-prompt`
-	- Also register `add-two-numbers` for Copilot UX; prefer a single `prompt: string` input so the full user prompt is passed to the server for number extraction.
+	- `add_two_numbers` must accept a single `prompt: string` input so the full user prompt is passed to the server for number extraction.
+	- Also register `add-two-numbers` as a Copilot UX alias with the same `prompt: string` input/behavior.
 
 6. Tools must be registered via `server.registerTool()` with `zod` schemas, and handlers must return `CallToolResult` including `content`.
 
@@ -40,7 +40,7 @@ Migrate any workspace to MCP Protocol `2025-11-25` and make it match the full ta
 	- Server version
 	- MCP SDK version
 	- MCP protocol version
-	- All registered tool names in orange as bullet points (one per line, prefixed with `- `)
+	- Tool names in orange as bullet points (one per line, prefixed with `- `); omit Copilot-only aliases to avoid duplicates
 9. Ensure tests mirror `src/` and maintain 100% coverage thresholds.
 
 ## Verification

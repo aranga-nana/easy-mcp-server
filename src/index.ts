@@ -20,6 +20,10 @@ async function main() {
         console.log(chalk.green(`MCP Protocol Version: ${PROTOCOL_VERSION}`));
         console.log(chalk.rgb(255, 165, 0)('Registered Tools:'));
         for (const toolName of REGISTERED_TOOL_NAMES) {
+            // Hide Copilot UX alias from startup display to avoid looking like a duplicate.
+            if (toolName === 'add-two-numbers') continue;
+            if (toolName === 'welcome') continue;
+            if (toolName === 'greeting') continue;
             console.log(chalk.rgb(255, 165, 0)(`- ${toolName}`));
         }
         console.log(`Port: ${DEFAULT_PORT}`);

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-resources.mjs",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
@@ -14,7 +14,6 @@
     "chalk": "^5.6.2",
     "express": "^5.2.1",
     "figlet": "^1.10.0",
-    "js-tiktoken": "^1.0.21",
     "zod": "^4.3.6"
   },
   "devDependencies": {

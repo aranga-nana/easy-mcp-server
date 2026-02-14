@@ -79,7 +79,7 @@ describe('Add Two Numbers Tool Integration', () => {
             method: 'tools/call',
             params: {
                 name: 'add_two_numbers',
-                arguments: { a: 10, b: 20 }
+                arguments: { prompt: 'add 10 and 20' }
             }
         };
 

@@ -4,6 +4,7 @@ import { SESSION_TIMEOUT_MS } from '../meta.js';
 export interface Session {
     transport: StreamableHTTPServerTransport;
     lastAccessed: number;
+    clientInfo?: { name: string; version: string };
 }
 
 export class SessionManager {
@@ -24,8 +25,8 @@ export class SessionManager {
         }, 60000); // Check every minute
     }
 
-    createSession(id: string, transport: StreamableHTTPServerTransport) {
-        this.sessions.set(id, { transport, lastAccessed: Date.now() });
+    createSession(id: string, transport: StreamableHTTPServerTransport, meta?: { clientInfo?: { name: string; version: string } }) {
+        this.sessions.set(id, { transport, lastAccessed: Date.now(), clientInfo: meta?.clientInfo });
         transport.onclose = () => {
             this.sessions.delete(id);
             console.log(`Session closed: ${id}`);

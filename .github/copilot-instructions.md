@@ -21,11 +21,9 @@
     *   `test/core/logger.test.ts` → tests `src/core/logger.ts`
         *   `test/tools/hello-world.test.ts` → tests `src/tools/hello-world/index.ts`
         *   `test/tools/add-two-numbers.test.ts` → tests `src/tools/add-two-numbers/index.ts`
-        *   `test/tools/tokenize-prompt.test.ts` → tests `src/tools/tokenize-prompt/index.ts`
     *   `test/integration/` → integration/E2E tests and shared test utilities (`test-utils.ts`)
         *   `test/integration/tools/hello-world.test.ts` → integration for `hello-world`
         *   `test/integration/tools/add-two-numbers.test.ts` → integration for `add_two_numbers`
-        *   `test/integration/tools/tokenize-prompt.test.ts` → integration for `tokenize-prompt`
     *   Do **NOT** place tests inside `src/` (e.g. no `src/__tests__/`).
 
 ### 1.1 Full Project Parity Target (for `/mcp-create`)
@@ -54,8 +52,6 @@ src/
             index.ts
         add-two-numbers/
             index.ts
-        tokenize-prompt/
-            index.ts
 test/
     index.test.ts
     core/
@@ -65,23 +61,39 @@ test/
     tools/
         hello-world.test.ts
         add-two-numbers.test.ts
-        tokenize-prompt.test.ts
     integration/
         test-utils.ts
         tools/
             hello-world.test.ts
             add-two-numbers.test.ts
-            tokenize-prompt.test.ts
 ```
 
 ### 1.2 Tool Naming Contract
 Keep tool names exactly (canonical names):
 - `hello-world`
 - `add_two_numbers`
-- `tokenize-prompt`
 
 Optional UX alias:
-- Also register `add-two-numbers` for Copilot UX. Prefer making this alias accept a single `prompt: string` so the full user prompt can be sent to the server, where the server extracts two numbers and returns the sum.
+- Also register `add-two-numbers` for Copilot UX.
+
+Add-two-numbers tool contract (for both `add_two_numbers` and `add-two-numbers`):
+- Input: `{ prompt: string }` (the *full* user prompt)
+- Behavior: extract the first two numbers from the prompt server-side and return the sum
+
+Client guidance (to encourage tool-first behavior):
+- If the user asks to add/sum/plus/total numbers and the message contains at least two numbers, call `add_two_numbers`.
+- Pass the user's message verbatim as `arguments.prompt` (do not pre-extract numbers on the client).
+- Example: user says `please add following number 10 and 7` → call `add_two_numbers` with `{ "prompt": "please add following number 10 and 7" }`.
+
+Hello-world tool contract (`hello-world`):
+- Input: `{}` (no parameters)
+- Behavior: read `resources/hello-world/welcome.md` and return it
+- Output (`structuredContent`): `{ message: string, mcpSdkVersion: string, clientName: string, clientVersion: string }`
+
+Greeting routing guidance:
+- If the user message is any greeting (e.g., `hello`, `hi`, `hey`, `welcome`, `good morning`, `good afternoon`, `good evening`) call `hello-world` with `{}`.
+- Optional aliases are also registered (same behavior): `welcome`, `greeting`.
+
 
 Tool implementation requirements:
 - Use `server.registerTool(...)` with `zod` `inputSchema`/`outputSchema`.
@@ -94,9 +106,9 @@ Tool implementation requirements:
   "name": "easy-mcp-server",
   "version": "1.0.0",
   "type": "module",
-  "scripts": { "build": "tsc", "start": "node dist/index.js", "dev": "tsx watch src/index.ts", "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js", "lint": "eslint src/ --fix" },
+    "scripts": { "build": "tsc && node scripts/copy-resources.mjs", "start": "node dist/index.js", "dev": "tsx watch src/index.ts", "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js", "lint": "eslint src/ --fix" },
   "engines": { "node": ">=20.0.0" },
-  "dependencies": { "@modelcontextprotocol/sdk": "^1.26.0", "chalk": "^5.6.2", "express": "^5.2.1", "figlet": "^1.10.0", "js-tiktoken": "^1.0.21", "zod": "^4.3.6" },
+    "dependencies": { "@modelcontextprotocol/sdk": "^1.26.0", "chalk": "^5.6.2", "express": "^5.2.1", "figlet": "^1.10.0", "zod": "^4.3.6" },
     "devDependencies": { "@eslint/js": "^9.39.2", "@types/express": "^5.0.6", "@types/figlet": "^1.7.0", "@types/jest": "^30.0.0", "@types/node": "^25.2.3", "@types/supertest": "^6.0.3", "eslint": "^9.39.2", "typescript-eslint": "^8.55.0", "jest": "^30.2.0", "supertest": "^7.2.2", "ts-jest": "^29.4.6", "tsx": "^4.21.0", "typescript": "^5.9.3" }
 }
 ```
@@ -308,19 +320,16 @@ export function createHttpServer(serverFactory: McpServerFactory) {
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerHelloWorld } from './hello-world/index.js';
 import { registerAddTwoNumbers } from './add-two-numbers/index.js';
-import { registerTokenizePrompt } from './tokenize-prompt/index.js';
 
 export const REGISTERED_TOOL_NAMES = [
     'hello-world',
     'add_two_numbers',
     'add-two-numbers',
-    'tokenize-prompt'
 ] as const;
 
 export function registerTools(server: McpServer) {
     registerHelloWorld(server);
     registerAddTwoNumbers(server);
-    registerTokenizePrompt(server);
 }
 ```
 
@@ -342,6 +351,8 @@ async function main() {
             console.log(chalk.green(`MCP Protocol Version: ${PROTOCOL_VERSION}`));
             console.log(chalk.rgb(255, 165, 0)('Registered Tools:'));
             for (const toolName of REGISTERED_TOOL_NAMES) {
+                // Hide Copilot UX alias from startup display to avoid looking like a duplicate.
+                if (toolName === 'add-two-numbers') continue;
                 console.log(chalk.rgb(255, 165, 0)(`- ${toolName}`));
             }
             console.log(`Port: ${DEFAULT_PORT}`);
@@ -365,5 +376,9 @@ curl -i -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -H
 # SSE
 curl -N -H "Accept: text/event-stream" -H "Mcp-Session-Id: <SESSION_ID>" http://localhost:8080/mcp &
 # Invoke
-curl -X POST "http://localhost:8080/mcp" -H "Content-Type: application/json" -H "Mcp-Session-Id: <SESSION_ID>" -H "Accept: application/json, text/event-stream" -d '{ "jsonrpc": "2.0", "id": "msg-1", "method": "tools/call", "params": { "name": "hello-world", "arguments": { "prompt": "hi" } } }'
+curl -X POST "http://localhost:8080/mcp" -H "Content-Type: application/json" -H "Mcp-Session-Id: <SESSION_ID>" -H "Accept: application/json, text/event-stream" -d '{ "jsonrpc": "2.0", "id": "msg-1", "method": "tools/call", "params": { "name": "hello-world", "arguments": {} } }'
+
+# Invoke add_two_numbers (prompt-based)
+curl -X POST "http://localhost:8080/mcp" -H "Content-Type: application/json" -H "Mcp-Session-Id: <SESSION_ID>" -H "Accept: application/json, text/event-stream" -d '{ "jsonrpc": "2.0", "id": "msg-2", "method": "tools/call", "params": { "name": "add_two_numbers", "arguments": { "prompt": "add 10 and 20" } } }'
+
 ```

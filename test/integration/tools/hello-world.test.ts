@@ -79,7 +79,7 @@ describe('Hello World Tool Integration', () => {
             method: "tools/call",
             params: {
                 name: "hello-world",
-                arguments: { prompt: "hi" }
+                arguments: {}
             }
         };
 
@@ -156,7 +156,10 @@ describe('Hello World Tool Integration', () => {
         // and unit tests verification of the tool logic.
         
         if (JSON.stringify(response.body) !== '{}') {
-             expect(JSON.stringify(response.body)).toContain('resource loaded by the hello-world tool');
+               const body = JSON.stringify(response.body);
+               expect(body).toContain('resource loaded by the hello-world tool');
+               expect(body).toContain('MCP SDK Version');
+               expect(body).toContain('1.0');
         } else {
              // Body empty, check session exists
              const session = sessionManager.getSession(sessionId);

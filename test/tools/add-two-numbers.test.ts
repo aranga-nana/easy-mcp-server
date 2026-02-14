@@ -45,7 +45,7 @@ describe('add_two_numbers tool', () => {
         expect(canonicalHandler).toBeDefined();
         expect(aliasHandler).toBeDefined();
 
-        const result = await canonicalHandler({ a: 10, b: 20 });
+        const result = await canonicalHandler({ prompt: 'add 10 and 20' });
         expect(result).toEqual({
             content: [{ type: "text", text: "30" }],
             structuredContent: { sum: 30 }

@@ -41,5 +41,8 @@ describe('tokenize-prompt tool', () => {
         // "Hello world" is usually [9906, 1917] or similar depending on encoding.
         // We just verify structure and non-empty.
         expect(content.count).toBe(2); 
+
+        expect(result.structuredContent).toBeDefined();
+        expect(result.structuredContent.count).toBe(2);
     });
 });

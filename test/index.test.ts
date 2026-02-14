@@ -26,7 +26,8 @@ describe('Index Entry Point', () => {
             createHttpServer: createHttpServerMock
         }));
         jest.unstable_mockModule('../src/tools/index.js', () => ({
-            registerTools: registerToolsMock
+            registerTools: registerToolsMock,
+            REGISTERED_TOOL_NAMES: ['hello-world']
         }));
 
         await import('../src/index.js');

@@ -6,7 +6,7 @@ An MCP server implementation using Streamable HTTP transport (Protocol Version 2
 
 - **Protocol**: MCP Streamable HTTP (2025-11-25)
 - **Transport**: HTTP POST/GET/DELETE
-- **Tools**: `add-two-numbers`, `tokenize-prompt`
+- **Tools**: `hello-world`, `add_two_numbers`, `tokenize-prompt` (plus Copilot alias `add-two-numbers`)
 - **Monitoring**: Health and Info endpoints
 
 ## Setup

@@ -4,7 +4,8 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { SessionManager } from './session.js';
 import { InMemoryEventStore } from './in-memory-event-store.js';
 import { randomUUID } from 'node:crypto';
-import { SERVER_NAME, SERVER_VERSION, ENDPOINT_PATH, PROTOCOL_VERSION } from '../meta.js';
+import { MCP_SDK_VERSION, SERVER_NAME, SERVER_VERSION, ENDPOINT_PATH, PROTOCOL_VERSION } from '../meta.js';
+import { createHttpLoggerMiddleware } from './logger.js';
 
 export type McpServerFactory = () => McpServer;
 
@@ -27,6 +28,9 @@ export function createHttpServer(serverFactory: McpServerFactory) {
 
     app.use(express.json());
 
+    // HTTP request/response logging with sensitive header masking.
+    app.use(createHttpLoggerMiddleware());
+
     app.get('/health', (req, res) => {
         res.json({ status: "healthy" });
     });
@@ -40,6 +44,7 @@ export function createHttpServer(serverFactory: McpServerFactory) {
         <head><title>${SERVER_NAME} Info</title></head>
         <body>
             <h1>${SERVER_NAME} v${SERVER_VERSION}</h1>
+            <p><strong>MCP SDK Version:</strong> ${MCP_SDK_VERSION}</p>
             <p><strong>Protocol Version:</strong> ${PROTOCOL_VERSION}</p>
             <p><strong>Active Sessions:</strong> ${activeSessions}</p>
             <p><strong>Uptime:</strong> ${Math.floor(uptime)} seconds</p>

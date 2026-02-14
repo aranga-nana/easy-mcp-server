@@ -20,10 +20,27 @@ Create the complete project from an empty workspace (no `src/`, `test/`, or `res
 2. Build the exact project structure and behavior expected by current repository parity:
    - Core transport/session/event-store/meta/index files.
    - Tool registry with `hello-world`, `add_two_numbers`, and `tokenize-prompt` implementations.
+     - Tools must be registered via `server.registerTool()` with `zod` schemas.
+     - Tool handlers must return a valid `CallToolResult` including `content` (and may include `structuredContent`).
+    - Also register `add-two-numbers` for Copilot UX; prefer a single `prompt: string` input so the full user prompt is passed to the server for number extraction.
    - Resource file: `resources/hello-world/welcome.md`.
    - Unit + integration tests under `test/` mirroring `src/`.
 3. Use strict TypeScript and kebab-case file names.
 4. Use `@modelcontextprotocol/sdk` v1.26.0+ with factory pattern (`McpServer` per session).
+
+5. Implement HTTP logging via `src/core/logger.ts` and wire it into the transport:
+   - Request headers: yellow
+   - Mask sensitive headers by replacing values with `***`
+   - Request body: green
+   - Response success (<400): green
+   - Response error (>=400): red
+
+6. On startup (console), display:
+   - Server name (figlet)
+   - Server version
+   - MCP SDK version
+   - MCP protocol version
+   - All registered tool names in orange as bullet points (one per line, prefixed with `- `)
 
 ## Dependency Audit (Mandatory)
 1. Create base `package.json`.

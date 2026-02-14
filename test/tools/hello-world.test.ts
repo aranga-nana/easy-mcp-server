@@ -39,7 +39,8 @@ describe('hello-world tool', () => {
         const expectedContent = await readFile(filePath, 'utf-8');
 
         expect(result).toEqual({
-            content: [{ type: "text", text: expectedContent }]
+            content: [{ type: "text", text: expectedContent }],
+            structuredContent: { message: expectedContent }
         });
     });
 });

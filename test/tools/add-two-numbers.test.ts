@@ -23,13 +23,17 @@ describe('add_two_numbers tool', () => {
     // We can "spy" on server.tool to capture the handler.
     it('should calculate sum correctly', async () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let toolHandler: any;
+        let canonicalHandler: any;
+        let aliasHandler: any;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const toolSpy = jest.spyOn(server, 'registerTool').mockImplementation(((...args: any[]) => {
             const name = args[0] as string;
             const handler = args[2];
              if (name === 'add_two_numbers') {
-                 toolHandler = handler;
+                 canonicalHandler = handler;
+             }
+             if (name === 'add-two-numbers') {
+                 aliasHandler = handler;
              }
              return server;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,11 +42,23 @@ describe('add_two_numbers tool', () => {
         registerAddTwoNumbers(server);
         
         expect(toolSpy).toHaveBeenCalled();
-        expect(toolHandler).toBeDefined();
+        expect(canonicalHandler).toBeDefined();
+        expect(aliasHandler).toBeDefined();
 
-        const result = await toolHandler({ a: 10, b: 20 });
+        const result = await canonicalHandler({ a: 10, b: 20 });
         expect(result).toEqual({
-            content: [{ type: "text", text: "30" }]
+            content: [{ type: "text", text: "30" }],
+            structuredContent: { sum: 30 }
         });
+
+        const aliasResult = await aliasHandler({ prompt: 'add 10 and 20' });
+        expect(aliasResult).toEqual({
+            content: [{ type: 'text', text: '30' }],
+            structuredContent: { sum: 30 }
+        });
+
+        const aliasError = await aliasHandler({ prompt: 'add ten and twenty' });
+        expect(aliasError.isError).toBe(true);
+        expect(aliasError.content?.[0]?.type).toBe('text');
     });
 });

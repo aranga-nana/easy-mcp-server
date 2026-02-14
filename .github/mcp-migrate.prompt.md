@@ -24,7 +24,24 @@ Migrate any workspace to MCP Protocol `2025-11-25` and make it match the full ta
 	- `hello-world`
 	- `add_two_numbers`
 	- `tokenize-prompt`
-6. Ensure tests mirror `src/` and maintain 100% coverage thresholds.
+	- Also register `add-two-numbers` for Copilot UX; prefer a single `prompt: string` input so the full user prompt is passed to the server for number extraction.
+
+6. Tools must be registered via `server.registerTool()` with `zod` schemas, and handlers must return `CallToolResult` including `content`.
+
+7. Implement HTTP logging via `src/core/logger.ts` and wire it into the transport:
+	- Request headers: yellow
+	- Mask sensitive headers by replacing values with `***`
+	- Request body: green
+	- Response success (<400): green
+	- Response error (>=400): red
+
+8. On startup (console), display:
+	- Server name (figlet)
+	- Server version
+	- MCP SDK version
+	- MCP protocol version
+	- All registered tool names in orange as bullet points (one per line, prefixed with `- `)
+9. Ensure tests mirror `src/` and maintain 100% coverage thresholds.
 
 ## Verification
 Run and fix until all pass:

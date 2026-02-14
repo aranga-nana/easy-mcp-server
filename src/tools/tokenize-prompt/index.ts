@@ -9,19 +9,25 @@ export function registerTokenizePrompt(server: McpServer) {
             description: "Tokenize a prompt",
             inputSchema: z.object({
                 prompt: z.string()
+            }),
+            outputSchema: z.object({
+                tokens: z.array(z.number()),
+                count: z.number()
             })
         },
         async ({ prompt }) => {
             const enc = getEncoding("cl100k_base");
             const tokens = enc.encode(prompt);
+            const structuredContent = {
+                tokens: Array.from(tokens),
+                count: tokens.length
+            };
             return {
                 content: [{ 
                     type: "text", 
-                    text: JSON.stringify({
-                        tokens: Array.from(tokens),
-                        count: tokens.length
-                    })
-                }]
+                    text: JSON.stringify(structuredContent)
+                }],
+                structuredContent
             };
         }
     );

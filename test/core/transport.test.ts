@@ -48,6 +48,7 @@ describe('MCP Server Transport', () => {
         const response = await request(app).get('/info');
         expect(response.status).toBe(200);
         expect(response.text).toContain("Active Sessions");
+        expect(response.text).toContain("MCP SDK Version");
     });
     
     it('should reject DELETE without session', async () => {

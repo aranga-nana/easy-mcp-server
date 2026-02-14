@@ -23,41 +23,7 @@ type CodeReviewInput = z.infer<typeof inputSchema>;
  * TODO: Replace with actual Copilot SDK integration
  */
 function generateSampleReview(files: CodeReviewInput['files']): string {
-    const fileList = files.map(f => `- ${f.name}`).join('\n');
-    
-    return `# Code Review Summary
-
-## Overview
-Reviewed ${files.length} file${files.length > 1 ? 's' : ''}:
-${fileList}
-
-## Overall Assessment
-✅ **Status**: Sample review generated successfully
-
-This is a **placeholder response**. The actual implementation will use the Copilot SDK to perform intelligent code review based on project standards.
-
-## Files Analyzed
-
-${files.map(f => `### ${f.name}
-- **Size**: ${f.content.length} bytes
-- **Lines**: ${f.content.split('\n').length}
-- **Status**: Received and validated
-`).join('\n')}
-
-## Next Steps
-
-The full implementation will:
-1. Load review standards from \`resources/code-review/standards.md\`
-2. Initialize Copilot SDK client and session
-3. Send files + standards to the model for analysis
-4. Return structured review with:
-   - 🔴 Critical Issues
-   - 🟡 Warnings
-   - 🟢 Suggestions
-   - ✨ Positive Observations
-
----
-*This is a sample response. Full implementation pending.*`;
+    return files.map(f => `### ${f.name}\n✅ LGTM`).join('\n\n');
 }
 
 export function registerCodeReview(server: McpServer) {

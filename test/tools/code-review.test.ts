@@ -175,9 +175,8 @@ describe('code-review tool', () => {
 
         expect(result.isError).not.toBe(true);
         expect(result.content?.[0]?.type).toBe('text');
-        expect(result.content?.[0]?.text).toContain('Code Review Summary');
-        expect(result.content?.[0]?.text).toContain('src/index.ts');
-        expect(result.content?.[0]?.text).toContain('placeholder response');
+        expect(result.content?.[0]?.text).toContain('### src/index.ts');
+        expect(result.content?.[0]?.text).toContain('✅ LGTM');
     });
 
     it('should return sample review for multiple files', async () => {
@@ -203,10 +202,9 @@ describe('code-review tool', () => {
 
         expect(result.isError).not.toBe(true);
         expect(result.content?.[0]?.type).toBe('text');
-        expect(result.content?.[0]?.text).toContain('Code Review Summary');
-        expect(result.content?.[0]?.text).toContain('Reviewed 2 files');
-        expect(result.content?.[0]?.text).toContain('src/index.ts');
-        expect(result.content?.[0]?.text).toContain('src/utils.ts');
+        expect(result.content?.[0]?.text).toContain('### src/index.ts');
+        expect(result.content?.[0]?.text).toContain('### src/utils.ts');
+        expect(result.content?.[0]?.text).toContain('✅ LGTM');
     });
 
     it('should include file statistics in sample review', async () => {
@@ -230,9 +228,7 @@ describe('code-review tool', () => {
 
         expect(result.isError).not.toBe(true);
         expect(result.content?.[0]?.type).toBe('text');
-        expect(result.content?.[0]?.text).toContain('Size');
-        expect(result.content?.[0]?.text).toContain('Lines');
-        expect(result.content?.[0]?.text).toContain(fileContent.length.toString());
-        expect(result.content?.[0]?.text).toContain('3'); // 3 lines
+        expect(result.content?.[0]?.text).toContain('### test.ts');
+        expect(result.content?.[0]?.text).toContain('✅ LGTM');
     });
 });

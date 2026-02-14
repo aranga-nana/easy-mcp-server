@@ -28,8 +28,7 @@ describe('MCP Server Transport', () => {
     };
 
     beforeAll(async () => {
-        const mcpServer = createMcpServer();
-        const result = createHttpServer(mcpServer);
+        const result = createHttpServer(createMcpServer);
         app = result.app;
         shutdown = result.shutdown;
     });
@@ -176,8 +175,7 @@ describe('MCP Server Transport', () => {
 
     it('should cleanup timed out sessions', async () => {
         jest.useFakeTimers();
-        const mcpServer = createMcpServer();
-        const { app: testApp, shutdown: testShutdown } = createHttpServer(mcpServer);
+        const { app: testApp, shutdown: testShutdown } = createHttpServer(createMcpServer);
 
         const initResponse = await request(testApp)
             .post('/mcp')

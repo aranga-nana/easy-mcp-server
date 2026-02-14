@@ -3,9 +3,14 @@ import { z } from 'zod';
 import { getEncoding } from 'js-tiktoken';
 
 export function registerTokenizePrompt(server: McpServer) {
-    server.tool(
+    server.registerTool(
         "tokenize-prompt",
-        { prompt: z.string() },
+        {
+            description: "Tokenize a prompt",
+            inputSchema: z.object({
+                prompt: z.string()
+            })
+        },
         async ({ prompt }) => {
             const enc = getEncoding("cl100k_base");
             const tokens = enc.encode(prompt);

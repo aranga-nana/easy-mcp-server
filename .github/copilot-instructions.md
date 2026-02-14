@@ -101,6 +101,7 @@ Follow these steps to implement the server:
         "mcp"
     ],
     "scripts": {
+        "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
         "typecheck": "tsgo -p tsconfig.json --noEmit",
         "build": "tsdown",
         "build:watch": "tsdown --watch",
@@ -123,14 +124,16 @@ Follow these steps to implement the server:
         "cors": "catalog:runtimeServerOnly",
         "express": "catalog:runtimeServerOnly",
         "hono": "catalog:runtimeServerOnly",
-        "zod": "catalog:runtimeShared"
+        "zod": "catalog:runtimeShared",
+        "jest": "^29.7.0"
     },
     "devDependencies": {
         "@modelcontextprotocol/eslint-config": "workspace:^",
         "@modelcontextprotocol/tsconfig": "workspace:^",
-        "@modelcontextprotocol/vitest-config": "workspace:^",
         "@types/cors": "catalog:devTools",
         "@types/express": "catalog:devTools",
+        "@types/jest": "^29.5.12",
+        "ts-jest": "^29.1.2",
         "tsdown": "catalog:devTools",
         "tsx": "^4.19.2",
         "eslint": "^9.20.0",
@@ -148,6 +151,35 @@ export const DEFAULT_PORT = 8080;
 export const DEFAULT_HOST = '127.0.0.1';
 export const SESSION_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes
 export const ENDPOINT_PATH = '/mcp';
+```
+
+### Jest Configuration (`jest.config.js`)
+```javascript
+/** @type {import('ts-jest').JestConfigWithTsJest} */
+export default {
+  preset: 'ts-jest/presets/default-esm',
+  testEnvironment: 'node',
+  extensionsToTreatAsEsm: ['.ts'],
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
+  transform: {
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      {
+        useESM: true,
+      },
+    ],
+  },
+  coverageThreshold: {
+    global: {
+      branches: 100,
+      functions: 100,
+      lines: 100,
+      statements: 100,
+    },
+  },
+};
 ```
 
 ### Event Store (`src/core/in-memory-event-store.ts`)

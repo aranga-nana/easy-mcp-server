@@ -1,23 +1,23 @@
 # Code Review Tool Design (MCP Server)
 
 ## 1. Overview
-The `code_review` tool leverages MCP Sampling capabilities to perform intelligent code reviews. It allows the MCP Server to gather context (local file changes) and offload the actual review generation to the capable AI Client (GitHub Copilot), enforcing customized validation standards.
+The `code_review` tool leverages the **MCP SDK (`@modelcontextprotocol/sdk`)** to invoke the **Copilot Model internally** via the Sampling API (`createMessage`). This allows the server to act as an autonomous agent that gathers strictly defined context (git changes) and programmatically requests a review from the underlying model, ensuring validation standards are applied without user intervention.
 
 ## 2. Detailed Data Flow
 
-1.  **Invocation**: User or Client invokes `code_review`.
-2.  **Discovery**:
-    *   If specific files are passed as arguments, those are used.
-    *   If no arguments are passed, the Server runs `git diff --name-only` (staged and unstaged) to identify modified files in the current workspace.
-3.  **Context Gathering**:
-    *   The Server reads the `resources/code-review/standards.md` file to load project-specific review guidelines.
-    *   The Server reads the raw text content of every identified modified file.
-4.  **Prompt Assembly**:
-    *   System Prompt: Constructed from `standards.md` + generic Security/Performance instructions.
-    *   User Message: "Please review the following files..." followed by the file paths and their contents wrapped in code blocks.
-5.  **Sampling**: The Server calls `server.createMessage` (MCP Sampling), sending this context to the Client (Copilot).
-6.  **Review Generation**: The Client's LLM processes the files against the standards and generates a Markdown report.
-7.  **Response**: The Server wraps this Markdown report in a standard MCP ToolResult and returns it to the user.
+1.  **Invocation**: User invokes `code_review` (manually or via chat).
+2.  **Discovery (Server-Side)**:
+    *   The Server runs `git diff --name-only` to strictly identify modified files.
+3.  **Context Gathering (Server-Side)**:
+    *   The Server reads `resources/code-review/standards.md` (Validation Standards).
+    *   The Server reads the exact file content from disk.
+4.  **Model Invocation (Internal SDK Call)**:
+    *   The Server constructs a structured prompt (Context + Standards).
+    *   **CRITICAL**: The Server calls `server.createMessage()` (from `mcp-sdk`).
+    *   This internally prompts the host (GitHub Copilot) to generate the review using its high-quality model.
+5.  **Result Delivery**:
+    *   The Model returns the generated markdown review.
+    *   The Server sends this back as the tool result.
 
 ## 3. Sequence Diagram
 

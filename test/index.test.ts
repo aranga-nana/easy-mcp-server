@@ -3,16 +3,16 @@ import { DEFAULT_PORT, DEFAULT_HOST } from '../src/meta.js';
 import { fileURLToPath } from 'node:url';
 
 describe('Index Entry Point', () => {
-    let mockListen: any;
-    let createMcpServerMock: any;
-    let createHttpServerMock: any;
-    let registerToolsMock: any;
-    let mockMcpServer: any;
-    let mockApp: any;
+    let mockListen: jest.Mock;
+    let createMcpServerMock: jest.Mock;
+    let createHttpServerMock: jest.Mock;
+    let registerToolsMock: jest.Mock;
+    let mockMcpServer: object;
+    let mockApp: object;
 
     beforeEach(async () => {
         jest.resetModules();
-        mockListen = jest.fn((port: any, host: any, cb: any) => cb && cb());
+        mockListen = jest.fn((port: unknown, host: unknown, cb: any) => cb && cb());
         mockApp = { listen: mockListen };
         mockMcpServer = {};
 

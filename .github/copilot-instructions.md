@@ -101,6 +101,8 @@ Follow these steps to implement the server:
 
 Use this configuration to ensure reproducible builds.
 
+**SECURITY & VERSIONING DIRECTIVE**: The versions listed below are minimums. You **MUST** query the NPM registry (e.g., `npm view`) to resolve the absolute latest stable version for `dependencies` and `devDependencies` that is compatible with the `@modelcontextprotocol/sdk`. **DO NOT** use the `latest` tag in `package.json` (use specific versions like `^1.2.3`). Ensure no known vulnerabilities exist before `npm install`.
+
 **`package.json`**:
 ```json
 {

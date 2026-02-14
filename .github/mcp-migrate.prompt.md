@@ -8,7 +8,7 @@ I need you to refactor this existing workspace to conform to the Model Context P
 
 **Execution Rules:**
 1. **Analysis**: Scan the current codebase. Identify existing tool logic or API endpoints.
-2. **Dependency Update**: Update `package.json` to match the **Reference Package Configuration** in "Section 3.1" of `.github/copilot-instructions.md`.
+2. **Dependency Update**: Update `package.json` to match the **Reference Package Configuration** in "Section 3.1" of `.github/copilot-instructions.md`. **CRITICAL**: Before installing, verify all packages are the latest stable versions compatible with the MCP SDK and are free of vulnerabilities.
 3. **Migration Strategy**: Strictly apply "Section 0.5 Migration Strategy" from `.github/copilot-instructions.md`. Move files and update imports to the new SDK.
 4. **Logic Preservation**: Do not delete existing business logic; wrap it in the new `registerTool` definitions as required by the instructions.
 5. **Quality Gates**: Refactor any loose types to strict TypeScript (no `any`), rename files to `kebab-case` if necessary. Ensure 100% test coverage using **Jest** by adding missing tests. Use **ESLint** for linting.
